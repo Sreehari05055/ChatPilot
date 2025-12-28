@@ -2,6 +2,8 @@
 
 Chat with your documents, search the web, and analyze data files - all in one place.
 
+**Demo Frontend:** Try ChatPilot with a UI → [ChatPilot Frontend](https://github.com/Sreehari05055/Demo-frontend)
+
 ## What it does
 
 Upload files and ask questions. ChatPilot can:
