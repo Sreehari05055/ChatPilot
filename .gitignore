@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# dotenv
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Chroma / index storage
+index_storage/
+*.sqlite3
+
+# Logs
+*.log
+app/app_errors.log
+
+# OS
+.DS_Store
+Thumbs.db

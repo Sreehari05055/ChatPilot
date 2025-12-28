@@ -1,0 +1,14 @@
+{
+  "model": {
+    "temperature": 0.2,
+    "top_p": 0.3,
+    "max_tokens": 1000
+  },
+  "tone_style": "concise",
+  "rag": {
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "top_k": 2
+  },
+  "max_conversation_turns": 10
+}

@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+httpx
+chromadb
+llama-index
+openai
+anthropic
+pymupdf4llm
+InquirerPy
+lxml
+python-docx
+clean-text
+ftfy
