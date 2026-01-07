@@ -22,8 +22,6 @@ class Config:
 
     DB_TYPE = "file"  # v1: Always use file
 
-    # Static app settings with env overrides
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/")
     DATA_DIR = os.getenv("DATA_DIR", "source_files/")
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
     # Load admin_config.json for other settings

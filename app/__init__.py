@@ -49,8 +49,8 @@ from app.services.rag_service import RAGPipeline
 from app.services.web.web_search_factory import WebSearchProviderFactory
 from app.services.llm_engine.factory import create_llm_engine
 from app.services.llm_engine.client_factory import build_llm_client
-from app.prompts.system_prompt import system_prompt
-from app.services.state_manager import InMemoryStore
+from app.prompts.prompts import system_prompt
+from app.services.state_manager import FileHistoryStore
 from starlette.middleware.sessions import SessionMiddleware
 import itsdangerous
 from app.services.code_execution.execution_service import CodeExecutionService
@@ -59,15 +59,12 @@ from app.services.web.web_fetch import WebFetchService
 # Ensure application data directories exist (after Config import)
 if not os.path.exists(Config.DATA_DIR):
     os.makedirs(Config.DATA_DIR, exist_ok=True)
-if not os.path.exists(Config.UPLOAD_DIR):
-    os.makedirs(Config.UPLOAD_DIR, exist_ok=True)
 if not os.path.exists(Config.INDEX_DIR):
     os.makedirs(Config.INDEX_DIR, exist_ok=True)
 
-
 def create_app() -> FastAPI:
 
-    history_store = InMemoryStore()
+    history_store = FileHistoryStore(storage_dir="conversations")
 
     if not Config.LLM_API_KEY:
         logger.error("LLM_API_KEY environment variable is not set")

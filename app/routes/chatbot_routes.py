@@ -26,7 +26,6 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
     @chatbot_bp.post('/api/chat', response_class=StreamingResponse)
     @limiter.limit("10/minute")
     async def get_bot_response(request: Request):
-        session_upload_dir = None  # For cleanup tracking
         try:
             
             session_id = (
@@ -62,25 +61,12 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
                             status_code=400
                         )
                 
-                # Save files to uploads/session_id/
+                # Save files to session's upload directory
                 if files:
-                    session_upload_dir = os.path.join(Config.UPLOAD_DIR, session_id)
-                    os.makedirs(session_upload_dir, exist_ok=True)
-                    
-                    for file in files:
-                        filepath = os.path.join(session_upload_dir, file.filename)
-                        content = await file.read()
-                        with open(filepath, 'wb') as f:
-                            f.write(content)
-                        uploaded_files.append(filepath)
-                        logger.info(f"Saved: {filepath}")
+                    uploaded_files = await history_store.save_uploaded_files(session_id, files)
             else:
                 body = await request.json()
                 question = body.get('question')
-
-                if body.get('session_id'):
-                    session_id = body.get('session_id')
-                    request.session["user_id"] = session_id
             
             if not question:
                 raise ValueError("Question field is required.")
@@ -88,14 +74,9 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
             chatbot_service = ChatbotService(llm_engine, web_search_service, web_fetch_service, rag_service, system_prompt, store=history_store, session_id=session_id, code_executor=code_executor)
 
             async def event_stream():
-                try:
-                    async for chunk in chatbot_service._generate_response(question, uploaded_files=uploaded_files):
-                        yield chunk
-                finally:
-                    
-                    if session_upload_dir and os.path.exists(session_upload_dir):
-                        shutil.rmtree(session_upload_dir)
-                        logger.info(f"Cleaned: {session_upload_dir}")
+                # Files persist for multi-turn conversations
+                async for chunk in chatbot_service._generate_response(question, uploaded_files=uploaded_files):
+                    yield chunk
 
             return StreamingResponse(event_stream(), media_type='text/event-stream', headers={
                     'Cache-Control': 'no-cache',
@@ -115,12 +96,63 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
             logger.error(f"ValueError: {ve}")
             return JSONResponse(content={"error": f"Invalid data: {str(ve)}"}, status_code=400)
         except Exception as e:
-            if session_upload_dir and os.path.exists(session_upload_dir):
-                shutil.rmtree(session_upload_dir)
             logger.exception("Unexpected error:")
             return JSONResponse(content={"error": "An unexpected error occurred. Please try again later."},
                                 status_code=500)
-
+    
+    @chatbot_bp.get('/api/conversations')
+    async def list_conversations(request: Request):
+        """Get all conversation sessions for the user"""
+        try:
+            sessions = await history_store.list_sessions()
+            return JSONResponse(content={"conversations": sessions})
+        except Exception as e:
+            logger.error(f"Error listing conversations: {e}")
+            return JSONResponse(
+                content={"error": "Failed to list conversations"},
+                status_code=500
+            )
+    @chatbot_bp.get('/api/conversations/{session_id}')
+    async def load_conversation(request: Request, session_id: str):
+        """Get conversation messages for a specific session"""
+        try:
+            messages = await history_store.get_messages(session_id)
+            metadata = await history_store.get_session_metadata(session_id)
+            return JSONResponse(content={"session_id": session_id, "messages": messages, "metadata": metadata})
+        except Exception as e:
+            logger.error(f"Error loading conversation {session_id}: {e}")
+            return JSONResponse(
+                content={"error": f"Failed to load conversation {session_id}"},
+                status_code=500
+            )
+    
+    @chatbot_bp.delete('/api/conversations/{session_id}')
+    async def delete_conversation(session_id: str, request: Request):
+        """Delete conversation history and uploaded files"""
+        try:
+            # Clear entire session (messages + uploads in one directory)
+            await history_store.clear_session(session_id)
+            
+            return JSONResponse(content={
+                "message": "Conversation deleted successfully",
+                "session_id": session_id
+            })
+        except Exception as e:
+            logger.error(f"Error deleting conversation {session_id}: {e}")
+            return JSONResponse(
+                content={"error": "Failed to delete conversation"},
+                status_code=500
+            )
+        
+    @chatbot_bp.post('/api/conversations/new')
+    async def new_conversation(request: Request):
+        """Create a new conversation session"""
+        session_id = str(uuid.uuid4())
+        return JSONResponse(content={
+            "session_id": session_id,
+            "message": "New conversation created"
+        })
+    
     app.include_router(chatbot_bp)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

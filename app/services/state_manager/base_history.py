@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List
 
 class BaseHistoryStore(ABC):
     @abstractmethod
@@ -7,4 +8,23 @@ class BaseHistoryStore(ABC):
 
     @abstractmethod
     async def add_message(self, session_id: str, message: dict):
+        pass
+
+    @abstractmethod
+    async def clear_session(self, session_id: str): pass
+    
+    @abstractmethod
+    async def list_sessions(self) -> list: pass
+    
+    @abstractmethod
+    async def get_session_metadata(self, session_id: str) -> dict: pass
+    
+    @abstractmethod
+    def get_session_upload_dir(self, session_id: str) -> str:
+        """Get directory where session files are stored"""
+        pass
+    
+    @abstractmethod
+    async def save_uploaded_files(self, session_id: str, files: list) -> List[str]:
+        """Save uploaded files to session storage, return file paths"""
         pass
