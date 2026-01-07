@@ -1,6 +1,8 @@
 import json
 from typing import Any, AsyncGenerator, Optional
 from app.services.llm_engine.base_gpt_engine import LLMEngine
+from app.services.llm_engine.tool_definitions import ANTHROPIC_TOOLS
+from app.services.llm_engine.message_adapter import AnthropicMessageAdapter
 from app import logger
 
 class AnthropicEngine(LLMEngine):
@@ -8,68 +10,37 @@ class AnthropicEngine(LLMEngine):
 
     def __init__(self, client):
         self.client = client
-        self.functions = [
-            {
-                "name": "web_search",
-                "description": "Rephrase the user's question to do a web search to find relevant information.",
-                "input_schema": {  
-                    "type": "object",
-                    "properties": {
-                        "question": {
-                            "type": "string",
-                            "description": "The user's question to be rephrased and web searched."
-                        }
-                    },
-                    "required": ["question"]
-                }
-            },
-            {
-                "name": "web_fetch",
-                "description": "Fetch and analyze the content of a specific URL provided by the user.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "format": "uri",
-                            "description": "The exact URL to fetch content from."
-                        }
-                    },
-                    "required": ["url"]
-                }
-            },
-            {
-                "name": "analyze_data",
-                "description": "Use when the user asks to analyze provided data or files using code.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "TODO": {
-                            "type": "string",
-                            "description": "A clear, specific description of what analysis to perform on the data. MUST be a complete, actionable task description."
-                        }
-                    },
-                    "required": ["TODO"]
-                }
-            }
-        ]
+        self.functions = ANTHROPIC_TOOLS
+        self.adapter = AnthropicMessageAdapter()
     
     async def _gpt_engine_stream(self, messages: list, model: str,
                                   top_p: float, max_completion_tokens: int, temperature: float,
                                   stream: bool = True, **kwargs) -> Optional[AsyncGenerator[Any, None]]:
+        use_tools = kwargs.get("use_tools", True)  # Allow disabling tools
         try:
-            response = await self.client.messages.create(
-                model=model,
-                messages=messages,
-                system=kwargs.get("system_prompt", ""),
-                tools=self.functions,
-                max_tokens=max_completion_tokens,
-                temperature=temperature,
-                stream=stream,
-            )
+            # Convert messages to Anthropic format
+            anthropic_messages = self.adapter.to_provider_format(messages)
+            
+            create_params = {
+                "model": model,
+                "messages": anthropic_messages,
+                "system": kwargs.get("system_prompt", ""),
+                "max_tokens": max_completion_tokens,
+                "temperature": temperature,
+                "stream": stream,
+            }
+            
+            if use_tools:
+                create_params["tools"] = self.functions
+
+            response = await self.client.messages.create(**create_params)
             return response
         except Exception as e:
             logger.error(f"Error in AnthropicEngine _gpt_engine_stream: {str(e)}", exc_info=True)
+            # Return error generator instead of None
+            async def error_gen():
+                yield {"type": "error", "content": f"Anthropic API error: {str(e)}", "function": None}
+            return error_gen()
     
 
 
@@ -112,7 +83,7 @@ class AnthropicEngine(LLMEngine):
                         "content": None, 
                         "function": {
                             "name": None,
-                            "id": provider_chunk.delta.id,
+                            "id": None,  # ID already sent in content_block_start
                             "arguments_fragment": provider_chunk.delta.partial_json
                         }
                     }

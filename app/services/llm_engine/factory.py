@@ -1,7 +1,6 @@
 from typing import Any
 from app.services.llm_engine.anthropic_engine import AnthropicEngine
 from app.services.llm_engine.openai_engine import OpenAIEngine
-from app.services.llm_engine.deepseek_engine import DeepseekEngine
 
 def create_llm_engine(provider: str, client: Any):
     """Factory for creating LLM engine instances.
@@ -16,6 +15,6 @@ def create_llm_engine(provider: str, client: Any):
         return AnthropicEngine(client)
     
     if provider.startswith("deepseek"):
-        return DeepseekEngine(client)
+        return OpenAIEngine(client)
 
     raise ValueError(f"Unsupported LLM provider: {provider}")

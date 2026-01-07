@@ -1,83 +1,35 @@
 from app.core import config
 from typing import Optional, AsyncGenerator, Any
-import asyncio
 from app.services.llm_engine.base_gpt_engine import LLMEngine
+from app.services.llm_engine.tool_definitions import OPENAI_TOOLS
 from app import logger
 
 class OpenAIEngine(LLMEngine):
     def __init__(self, client):
         self.client = client
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "web_search",
-                    "description": "Rephrase the user's question to do a web search to find relevant information.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {
-                                "type": "string",
-                                "description": "The user's question to be rephrased and web searched."
-                            }
-                        },
-                        "required": ["question"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "web_fetch",
-                    "description": "Fetch and analyze the content of a specific URL provided by the user.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "format": "uri",
-                                "description": "The exact URL to fetch content from."
-                            }
-                        },
-                        "required": ["url"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_data",
-                    "description": "Use when the user asks to analyze provided data or files using code.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "TODO": {
-                                "type": "string",
-                                "description": "A clear description of the analysis task to perform."
-                            }
-                        },
-                        "required": ["TODO"]
-                    }
-                }
-            }
-        ]
+        self.tools = OPENAI_TOOLS
 
     async def _gpt_engine_stream(self, messages: list, model: str,
                                   top_p: float, max_completion_tokens: int, temperature: float,
                                   stream: bool = True, **kwargs) -> Optional[AsyncGenerator[Any, None]]:
         system_str = kwargs.get("system_prompt", "")
+        use_tools = kwargs.get("use_tools", True)  # Allow disabling tools
         try:
             combined_messages = [{"role": "system", "content": system_str}] + messages
 
-            response = await self.client.chat.completions.create(
-                model=model,
-                messages=combined_messages,
-                tools=self.tools,
-                top_p=top_p,
-                max_completion_tokens=max_completion_tokens,
-                temperature=temperature,
-                stream=stream,
-            )
+            create_params = {
+                "model": model,
+                "messages": combined_messages,
+                "top_p": top_p,
+                "max_completion_tokens": max_completion_tokens,
+                "temperature": temperature,
+                "stream": stream,
+            }
+            
+            if use_tools:
+                create_params["tools"] = self.tools
+
+            response = await self.client.chat.completions.create(**create_params)
             return response
         except Exception as e:
             logger.error(f"Error in OpenAIEngine _gpt_engine_stream: {str(e)}", exc_info=True)
@@ -110,6 +62,7 @@ class OpenAIEngine(LLMEngine):
                             "type": "function_call", 
                             "content": None, 
                             "function": {
+                                "id": getattr(tc, "id", None),  # Include tool call ID
                                 "name": getattr(tc.function, "name", None),
                                 "arguments_fragment": getattr(tc.function, "arguments", None)
                             }
