@@ -24,6 +24,9 @@ index_storage/
 *.log
 app/app_errors.log
 
+# conversations
+conversations/
+
 # OS
 .DS_Store
 Thumbs.db
