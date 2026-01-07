@@ -23,7 +23,8 @@ class CodeExecutionService:
             results[filename] = metadata
         return results
     
-    async def generate_solution(self, task_todo: str, metadata: dict) -> dict:
+    async def generate_solution(self, analysis_plan: list[str], task_type: str, metadata: dict, target_column: str | None = None, risk_checks: list[str] | None = None, previous_code: str = None,
+    previous_error: str = None) -> dict:
         """Generate solution using Python code for the given task using LLM."""
         
         previous_code = None
@@ -33,7 +34,7 @@ class CodeExecutionService:
             logger.info(f"Code generation attempt {attempt}/{Config.MAX_RETRIES}")
         
             try:
-                code_response = await self.code_generator.generate_code(task_todo, metadata, previous_code, previous_error)
+                code_response = await self.code_generator.generate_code(analysis_plan, task_type, metadata, target_column, risk_checks, previous_code, previous_error)
 
                 cleaned_code = BaseFileHandler.clean_code_block(code_response)
                 
@@ -57,9 +58,10 @@ class CodeExecutionService:
                 logger.error(f"Error in attempt {attempt}: {e}")
                 previous_error = str(e)                 
 
-        logger.error(f"All {Config.MAX_RETRIES} attempts failed")
+        logger.error(f"All {Config.MAX_RETRIES} attempts failed. Last error: {previous_error}")
         return {
             'success': False,
-            'error': f"Failed after {Config.MAX_RETRIES} attempts. Last error: {previous_error}",
+            'error': previous_error or "Code generation failed after multiple attempts",
+            'code': previous_code,
             'attempts': Config.MAX_RETRIES
         }

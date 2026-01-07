@@ -167,11 +167,12 @@ class ChatbotService:
                         
                     elif function_name == "analyze_data":
                         args = json.loads(args_str) if args_str.strip() else {}
-                        task = args.get("TODO", "")
-                        if not task:
-                            task = query
-                        
-                        result = await self.code_executor.generate_solution(task, file_metadata)
+                        plan = args["analysis_plan"]
+                        task_type = args["task_type"]
+                        target = args.get("target_column")
+                        risks = args.get("risk_checks", [])
+
+                        result = await self.code_executor.generate_solution(plan, task_type, file_metadata, target, risks)
                         if result['success']:
                             tool_content = f"Analysis result: {result['result']}" if result['result'] else "Task completed successfully with no output."
                         else:
