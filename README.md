@@ -17,7 +17,7 @@ All of this works in a normal conversation. Ask follow-ups, combine different so
 ## How it works
 
 - Built with FastAPI and async streaming
-- Currently supports OpenAI models (Claude, DeepSeek, and Gemini support coming soon)
+- Currently supports OpenAI, Claude, DeepSeek (Gemini and Ollama support coming soon)
 - Uses vector search for documents
 - Runs Python code in a sandbox for data analysis
 - Keeps conversation history so you can ask follow-ups naturally
@@ -40,7 +40,7 @@ All of this works in a normal conversation. Ask follow-ups, combine different so
 - Vector database for document search
 - Sandboxed Python execution for data analysis
 - Multi-LLM support (OpenAI/Claude/DeepSeek)
-- Tool system for web search and code execution
+- Tool system for web search, web fetch and code execution
 
 ## License
 
