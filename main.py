@@ -10,17 +10,8 @@ def run_configurator():
     module_name = "scripts.configure"
     subprocess.run([sys.executable, "-m", module_name], check=True, cwd=str(project_root))
 
-
-def run_admin_configurator():
-    # Execute the admin CLI as a module so package imports are available
-    project_root = Path(__file__).resolve().parent
-    module_name = "scripts.admin_manage"
-    subprocess.run([sys.executable, "-m", module_name], check=True, cwd=str(project_root))
-
-
 def main():
     parser = argparse.ArgumentParser(description="ChatPilot runner")
-    parser.add_argument('--admin-config', action='store_true', help='Interactively update configuration')
     parser.add_argument("--configure", action="store_true", help="Run interactive configuration wizard and exit")
     parser.add_argument("--dev", action="store_true", help="Run development server (uvicorn) for local testing")
     parser.add_argument("--host", default="0.0.0.0", help="Host for the FastAPI server")
@@ -29,10 +20,6 @@ def main():
 
     if args.configure:
         run_configurator()
-        return
-
-    if args.admin_config:
-        run_admin_configurator()
         return
 
     if args.dev:

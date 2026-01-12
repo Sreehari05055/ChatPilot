@@ -12,21 +12,6 @@ import json
 # Ensure `configuration/admin_config.json` exists at startup with sensible defaults
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(PROJECT_ROOT, "configuration")
-ADMIN_CONFIG_PATH = os.path.join(CONFIG_DIR, "admin_config.json")
-DEFAULT_ADMIN_CONFIG = {
-    "model": {"temperature": 0.4, "max_tokens": 1000, "top_p": 1.0},
-    "rag": {"chunk_size": 500, "chunk_overlap": 50, "top_k": 2},
-    "max_conversation_turns": 10,
-}
-
-try:
-    if not os.path.exists(ADMIN_CONFIG_PATH):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(ADMIN_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_ADMIN_CONFIG, f, indent=2, ensure_ascii=False)
-except Exception:
-    # If creation fails, continue; Config import will handle errors
-    pass
 
 tracemalloc.start()
 limiter = Limiter(key_func=get_remote_address)
@@ -41,6 +26,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("ChatLogger")
 logger.setLevel(logging.DEBUG)
+
 from fastapi import FastAPI
 from app.core.config import Config
 from slowapi.middleware import SlowAPIMiddleware
@@ -49,7 +35,6 @@ from app.services.rag_service import RAGPipeline
 from app.services.web.web_search_factory import WebSearchProviderFactory
 from app.services.llm_engine.factory import create_llm_engine
 from app.services.llm_engine.client_factory import build_llm_client
-from app.prompts.prompts import system_prompt
 from app.services.state_manager import FileHistoryStore
 from starlette.middleware.sessions import SessionMiddleware
 import itsdangerous
@@ -102,7 +87,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowAPIMiddleware)
 
     from app.routes.chatbot_routes import init_chatbot_routes
-    init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, rag_service, system_prompt, history_store, code_executor )
+    init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, rag_service, Config.system_prompt, history_store, code_executor )
 
     return app
 
