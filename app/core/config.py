@@ -80,7 +80,7 @@ class Config:
         # Conversation settings
         MAX_CONVERSATION_TURNS = admin.max_conversation_turns
         
-        HTTP_TIMEOUT = 10
+        HTTP_TIMEOUT = 30  # seconds
         WEB_SEARCH_NUM_RESULTS = 5
         EMBEDDING_DIM = 1024  # Dimension for BGE-2.0 models
         EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"

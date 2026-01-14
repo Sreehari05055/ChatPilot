@@ -37,9 +37,7 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
         
             logger.info(f"Using session: {session_id}")
             request.session["user_id"] = session_id
-        
-                    
-            uploaded_files = []
+
             content_type = request.headers.get('content-type', '')
             if content_type.startswith('multipart/form-data'):
                 form = await request.form()
@@ -63,7 +61,9 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
                 
                 # Save files to session's upload directory
                 if files:
-                    uploaded_files = await history_store.save_uploaded_files(session_id, files)
+                    saved_paths = await history_store.save_uploaded_files(session_id, files)
+                    file_metadata = await code_executor.analyze_files(saved_paths)
+                    await history_store.save_session_metadata(session_id, file_paths=saved_paths, file_metadata=file_metadata)
             else:
                 body = await request.json()
                 question = body.get('question')
@@ -75,7 +75,7 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
 
             async def event_stream():
                 # Files persist for multi-turn conversations
-                async for chunk in chatbot_service._generate_response(question, uploaded_files=uploaded_files):
+                async for chunk in chatbot_service._generate_response(question):
                     yield chunk
 
             return StreamingResponse(event_stream(), media_type='text/event-stream', headers={

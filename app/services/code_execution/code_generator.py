@@ -17,9 +17,14 @@ class CodeGenerator:
         - File names
         - Sheet names
         - Columns + dtypes
-        - Random samples
 
         {metadata}
+
+        ==========
+        CRITICAL INSTRUCTIONS
+        ==========
+        - You must use the exact file names when loading data
+        - Filenames: {'\n'.join(metadata.keys())} 
 
         ==============================================================
         TASK CONTEXT (STRUCTURED — FOLLOW EXACTLY)
@@ -44,11 +49,18 @@ class CodeGenerator:
         1. **Column Name Normalization**
         - Convert all column names and all user-requested variables to **lowercase**.
 
-        2. **Allowed Libraries**
+        2 **Always configure stdout and stderr to handle Unicode**
+        - Use the following code at the start of your script:
+        ```python 
+        import sys
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        ```
+        3. **Allowed Libraries**
         - USE ONLY: pandas, numpy, scikit-learn, statsmodels, matplotlib, seaborn.
         - STRICTLY FORBIDDEN: tensorflow, keras, pytorch, torch.
 
-        3. **Output Format**
+        4. **Output Format**
         - CRITICAL: You MUST print() ALL results, findings, and outputs
         - Every analysis step MUST have print() statements showing the results
         - Use print() for dataframes (df.head()), statistics, plots saved messages, etc.

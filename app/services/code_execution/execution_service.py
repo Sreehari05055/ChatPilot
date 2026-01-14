@@ -19,8 +19,7 @@ class CodeExecutionService:
         for filepath in filepaths:
             handler = FileHandlerFactory.get_handler(filepath)
             metadata = handler.analyze_file(filepath)
-            filename = os.path.basename(filepath)
-            results[filename] = metadata
+            results[filepath] = metadata
         return results
     
     async def generate_solution(self, analysis_plan: list[str], task_type: str, metadata: dict, target_column: str | None = None, risk_checks: list[str] | None = None, previous_code: str = None,
@@ -34,6 +33,7 @@ class CodeExecutionService:
             logger.info(f"Code generation attempt {attempt}/{Config.MAX_RETRIES}")
         
             try:
+                logger.info(f"Metadata for code generation: {metadata}")
                 code_response = await self.code_generator.generate_code(analysis_plan, task_type, metadata, target_column, risk_checks, previous_code, previous_error)
 
                 cleaned_code = BaseFileHandler.clean_code_block(code_response)
@@ -59,6 +59,7 @@ class CodeExecutionService:
                 previous_error = str(e)                 
 
         logger.error(f"All {Config.MAX_RETRIES} attempts failed. Last error: {previous_error}")
+        
         return {
             'success': False,
             'error': previous_error or "Code generation failed after multiple attempts",

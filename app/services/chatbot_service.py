@@ -35,6 +35,10 @@ class ChatbotService:
 
     def _update_system_message(self, context_chunks, file_metadata=None):
         """Build system message with RAG context."""
+        logger.debug(f"File metadata for system message: {file_metadata}")
+        if isinstance(file_metadata, dict) and "file_metadata" in file_metadata:
+            file_metadata = file_metadata["file_metadata"]
+
         if not context_chunks:
             formatted_context = "No relevant knowledge base entries found for this specific query."
         elif isinstance(context_chunks, list):
@@ -78,16 +82,17 @@ class ChatbotService:
             logger.error(f"Error with {config.MODEL_NAME}: {str(e)}", exc_info=True)
             return None
 
-    async def _generate_response(self, query: str, uploaded_files: Optional[list] = None) -> AsyncGenerator[str, None]:
+    async def _generate_response(self, query: str) -> AsyncGenerator[str, None]:
         """Generate a streaming response."""
         try:
             messages = await self.store.get_messages(self.session_id)
-            file_metadata = None
-            if uploaded_files:
-                try:
-                    file_metadata = await self.code_executor.analyze_files(uploaded_files)
-                except Exception as e:
-                    logger.error(f"File analysis error: {e}")
+
+            file_metadata = await self.store.get_session_metadata(self.session_id)
+            uploaded_files = await self.store.get_uploaded_file_paths(self.session_id)
+            
+            logger.info(f"Uploaded file paths: {uploaded_files}")
+            logger.info(f"Uploaded file metadata: {file_metadata}")
+
             yield f"data: {json.dumps({'status': 'Searching knowledge base...'})}\n\n"
             try:
                 context_chunks = await self.rag_service._get_corpus_data(query)
@@ -96,7 +101,7 @@ class ChatbotService:
             except Exception as e:
                 logger.error(f"RAG failed: {e}")
 
-            current_system_message = self._update_system_message(context_chunks, file_metadata)
+            current_system_message = self._update_system_message(context_chunks, file_metadata.get("file_metadata", {}))
             
             new_msg = {"role": "user", "content": query}
             messages.append(new_msg)
@@ -173,11 +178,31 @@ class ChatbotService:
                         risks = args.get("risk_checks", [])
 
                         result = await self.code_executor.generate_solution(plan, task_type, file_metadata, target, risks)
-                        if result['success']:
-                            tool_content = f"Analysis result: {result['result']}" if result['result'] else "Task completed successfully with no output."
+                        logger.debug(f"Code execution result: {result}")
+                        success = bool(result.get("success"))
+                        res = result.get("result")
+                        code = result.get("code", "")
+                        attempts = result.get("attempts", 0)
+                        error = result.get("error")
+                        
+                        if success:
+                            if res:                                
+                                tool_content = (
+                                    "Analysis result:\n\n"
+                                    f"Result:\n{res}\n\n"
+                                    "Generated code:\n```python\n"
+                                    f"{code}\n```\n\n"
+                                    f"Attempts: {attempts}"
+                                )
+                            else:
+                                tool_content = "Analysis completed but no result was returned."
                         else:
-                            tool_content = f"Analysis failed: {result['error']}"
-                                    
+                            tool_content = (
+                                f"Analysis failed after {attempts} attempts.\n\n"
+                                f"Error: {error}\n\n"
+                                f"Always explain what went wrong and show the error message.\n\n"
+                            )
+                    
                 except Exception as e:
                     logger.error(f"Tool error: {e}")
                     tool_content = f"Error: {str(e)}"
@@ -193,7 +218,7 @@ class ChatbotService:
                 await self.store.add_message(self.session_id, tool_msg)
         
                 messages = self._trim_messages(messages)
-                followup_stream = await self._gpt_engine(messages=messages, system_prompt=self._update_system_message([]))
+                followup_stream = await self._gpt_engine(messages=messages, system_prompt=self._update_system_message([], file_metadata.get("file_metadata", {})))
                 
                 if followup_stream:
                     async for chunk in followup_stream:

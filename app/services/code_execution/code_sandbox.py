@@ -21,7 +21,7 @@ class CodeSandboxExecutor:
                 tf.flush()
                 tmp_path = tf.name
 
-            proc = subprocess.run([sys.executable, tmp_path], capture_output=True, text=True, timeout=Config.HTTP_TIMEOUT)
+            proc = subprocess.run([sys.executable, tmp_path], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=Config.HTTP_TIMEOUT)
 
             success = proc.returncode == 0
             return {
