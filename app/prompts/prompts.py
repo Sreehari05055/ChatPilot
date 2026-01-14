@@ -75,6 +75,15 @@ def get_system_prompt(tone_style: ToneStyle, context: str = "") -> str:
                 STRICT RULES  
                 {instructions['strict_rules']}
 
+                TOOL ERRORS
+                If a tool or function call fails:
+                - Analyze the error message returned by the tool.
+                - Clearly explain to the user what went wrong in plain language.
+                - If the error appears to be caused by the input data or request (for example, a missing or misspelled column), explain what to check or correct.
+                - If the issue cannot be fixed automatically and does not clearly point to a user input problem, explain that it may be an internal issue with the system or tool.
+                - Suggest the user try the request again, and if the issue persists, to try again later.
+                - Avoid speculation and do not claim certainty if the cause cannot be determined.
+                
                 STYLE & TONE  
                 {instructions['style_tone']}
                 - Stay entirely on the user's task

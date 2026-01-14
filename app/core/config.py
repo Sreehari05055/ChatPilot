@@ -49,7 +49,6 @@ admin = AdminConfig(
     ),
     max_conversation_turns=10
 )
-# ============================================
 
 class Config:
     LLM_PROVIDER = os.getenv("LLM_PROVIDER")
@@ -85,9 +84,9 @@ class Config:
         EMBEDDING_DIM = 1024  # Dimension for BGE-2.0 models
         EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"
         COLLECTION_NAME = "chat_collection"
-        MAX_RETRIES = 3
+        EXEC_MAX_RETRIES = 3
+        MAIN_LLM_MAX_RETRIES = 2
 
     except Exception as e:
         logger.error(f"Error in configuration: {e}")
         raise RuntimeError(f"Error in configuration: {e}") from e
-    

@@ -109,41 +109,49 @@ class ChatbotService:
 
             messages = self._trim_messages(messages)
 
-            stream = await self._gpt_engine(messages=messages, system_prompt=current_system_message)
-            
             buffer = StringIO()
-            function_called = False
-            function_name = None
-            tool_call_id = None
-            function_args = StringIO()
-            
-            async for chunk in stream:
-                if not chunk:
-                    continue
 
-                ctype = chunk.get("type")
-                content = chunk.get("content")
-                func = chunk.get("function")
+            for attempt in range(1, Config.MAIN_LLM_MAX_RETRIES + 1):
+                logger.info(f"LLM response attempt {attempt}/{Config.MAIN_LLM_MAX_RETRIES}")
 
-                if ctype == "function_call" or func:
-                    function_called = True
-                    try:
-                        name = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
-                        if name:
-                            function_name = name
-                        args_frag = func.get("arguments_fragment") if isinstance(func, dict) else getattr(func, "arguments", None)
-                        if args_frag:
-                            function_args.write(args_frag)
-                        if func.get("id"): tool_call_id = func["id"]
-                    except Exception:
-                        function_args.write(str(func))
-                    continue
+                function_called = False
+                function_name = None
+                tool_call_id = None
+                function_args = StringIO()
+                
+                stream = await self._gpt_engine(messages=messages, system_prompt=current_system_message)
+                
+                async for chunk in stream:
+                    if not chunk:
+                        continue
 
-                if ctype == "delta" and content:
-                    buffer.write(content)
-                    yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                    ctype = chunk.get("type")
+                    content = chunk.get("content")
+                    func = chunk.get("function")
 
-            if function_called:
+                    if ctype == "function_call" or func:
+                        function_called = True
+                        try:
+                            name = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
+                            if name:
+                                function_name = name
+                            args_frag = func.get("arguments_fragment") if isinstance(func, dict) else getattr(func, "arguments", None)
+                            if args_frag:
+                                function_args.write(args_frag)
+                            if func.get("id"): tool_call_id = func["id"]
+                        except Exception:
+                            function_args.write(str(func))
+                        continue
+
+                    if ctype == "delta" and content:
+                        buffer.write(content)
+                        yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                
+                if not function_called:
+                    # No function called, break the retry loop
+                    break
+
+
                 args_str = function_args.getvalue()
                 
 
@@ -184,6 +192,7 @@ class ChatbotService:
                         code = result.get("code", "")
                         attempts = result.get("attempts", 0)
                         error = result.get("error")
+                        retryable = error.get("retryable", False)
                         
                         if success:
                             if res:                                
@@ -197,34 +206,70 @@ class ChatbotService:
                             else:
                                 tool_content = "Analysis completed but no result was returned."
                         else:
-                            tool_content = (
-                                f"Analysis failed after {attempts} attempts.\n\n"
-                                f"Error: {error}\n\n"
-                                f"Always explain what went wrong and show the error message.\n\n"
-                            )
-                    
+                            if error and not retryable:
+                                
+                                error_message = error.get('message', 'Unknown error')
+                                error_category = error.get('category', 'Unknown')
+                                logger.error(
+                                    f"Stopping analysis: category={error_category} reason={error_message}"
+                                )
+
+                                # Send error as tool response
+                                tool_content = (
+                                    "ERROR: Analysis could not be completed.\n"
+                                    f"Reason: {error_message}\n\n"
+                                    "Do not attempt to retry this analysis automatically.\n"
+                                    "Explain to the user what went wrong in plain language. "
+                                    "If the issue appears related to the input data or request, suggest what they may want to check. "
+                                    "If it does not clearly point to a user input issue, explain that it may be an internal problem and suggest trying again later."
+                                )
+
+                                tool_msg = {
+                                    "role": "tool",
+                                    "tool_call_id": tool_call_id or "call_default",
+                                    "name": function_name,
+                                    "content": tool_content
+                                }
+                                messages.append(tool_msg)
+                                await self.store.add_message(self.session_id, tool_msg)
+                                
+                                # Get follow-up explanation from LLM
+                                messages = self._trim_messages(messages)
+                                followup_stream = await self._gpt_engine(
+                                    messages=messages, 
+                                    system_prompt=self._update_system_message([], file_metadata.get("file_metadata", {}))
+                                )
+                                
+                                if followup_stream:
+                                    async for chunk in followup_stream:
+                                        if chunk.get("type") == "delta" and chunk.get("content"):
+                                            buffer.write(chunk["content"])
+                                            yield f"data: {json.dumps({'content': chunk['content']}, ensure_ascii=False)}\n\n"
+                                
+                                # Break out of retry loop after getting final explanation
+                                break
+                            else:
+                                # Retryable error or other case
+                                tool_content = f"Analysis attempt failed: {error.get('message', 'Unknown error') if error else 'Unknown error'}"    
+                
                 except Exception as e:
                     logger.error(f"Tool error: {e}")
                     tool_content = f"Error: {str(e)}"
                 
-                tool_msg = {
-                    "role": "tool",
-                    "tool_call_id": tool_call_id or "call_default",
-                    "name": function_name,
-                    "content": str(tool_content)
-                }
+                if not (function_name == "analyze_data" and error and not retryable):
+                    
+                    tool_msg = {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id or "call_default",
+                        "name": function_name,
+                        "content": str(tool_content)
+                    }
 
-                messages.append(tool_msg)
-                await self.store.add_message(self.session_id, tool_msg)
-        
-                messages = self._trim_messages(messages)
-                followup_stream = await self._gpt_engine(messages=messages, system_prompt=self._update_system_message([], file_metadata.get("file_metadata", {})))
-                
-                if followup_stream:
-                    async for chunk in followup_stream:
-                        if chunk.get("type") == "delta" and chunk.get("content"):
-                            buffer.write(chunk["content"])
-                            yield f"data: {json.dumps({'content': chunk['content']})}\n\n"
+                    messages.append(tool_msg)
+                    await self.store.add_message(self.session_id, tool_msg)
+            
+                    messages = self._trim_messages(messages)
+
             # Finalize
             final_response = buffer.getvalue()
             buffer.close()

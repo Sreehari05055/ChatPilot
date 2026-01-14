@@ -1,5 +1,6 @@
 
 import os
+from app.services.code_execution.error_classifier import ErrorClassifier
 from app.services.code_execution.file_handler_factory import FileHandlerFactory
 from app.services.code_execution.code_generator import CodeGenerator
 from app.services.code_execution.code_sandbox import CodeSandboxExecutor
@@ -11,7 +12,9 @@ class CodeExecutionService:
     def __init__(self, llm_engine):
         self.llm_engine = llm_engine
         self.code_generator = CodeGenerator(self.llm_engine)
-        self.code_executor = CodeSandboxExecutor()
+        self.error_classifier = ErrorClassifier()
+        self.code_executor = CodeSandboxExecutor(self.error_classifier)
+
 
     async def analyze_files(self, filepaths: list) -> dict:
         """Analyze uploaded files, return metadata."""
@@ -28,9 +31,10 @@ class CodeExecutionService:
         
         previous_code = None
         previous_error = None
-
-        for attempt in range(1, Config.MAX_RETRIES + 1):
-            logger.info(f"Code generation attempt {attempt}/{Config.MAX_RETRIES}")
+        unknown_retry_used = False
+        
+        for attempt in range(1, Config.EXEC_MAX_RETRIES + 1):
+            logger.info(f"Code generation attempt {attempt}/{Config.EXEC_MAX_RETRIES}")
         
             try:
                 logger.info(f"Metadata for code generation: {metadata}")
@@ -42,27 +46,41 @@ class CodeExecutionService:
                 logger.debug(f"Execution result: {execution_result}")
                 if execution_result['success']:
                     logger.info(f"✅ Success on attempt {attempt}")
+                    
                     return {
                         'success': True,
                         'result': execution_result['result'],
                         'code': cleaned_code,
                         'attempts': attempt
                     }
-                else:
-                    # Failed - prepare for retry
-                    previous_code = cleaned_code
-                    previous_error = execution_result['error']
-                    logger.warning(f"❌ Attempt {attempt} failed: {previous_error}")
-            
+                previous_code = cleaned_code
+                previous_error = execution_result.get('error', 'Unknown error during execution')
+                
+                logger.warning(
+                f"Attempt {attempt} failed: category={previous_error['category']}, retryable={previous_error['retryable']}"
+                )
+                
+                if previous_error['category'] == "NON_RETRYABLE":
+                    logger.error(f"Non-retryable error encountered: {previous_error['message']}. Aborting further attempts.")
+                    break
+                
+                if previous_error['category'] == "UNKNOWN":
+                    if unknown_retry_used:
+                        logger.error(f"Unknown error encountered again: {previous_error['message']}. Aborting further attempts.")
+                        break
+                    unknown_retry_used = True
+                
             except Exception as e:
-                logger.error(f"Error in attempt {attempt}: {e}")
-                previous_error = str(e)                 
-
-        logger.error(f"All {Config.MAX_RETRIES} attempts failed. Last error: {previous_error}")
-        
+                logger.exception(f"Unhandled exception on attempt {attempt}")
+                previous_error = {
+                    "message": str(e),
+                    "category": "NON_RETRYABLE",
+                    "retryable": False,
+                }
+                break              
         return {
-            'success': False,
-            'error': previous_error or "Code generation failed after multiple attempts",
-            'code': previous_code,
-            'attempts': Config.MAX_RETRIES
+            "success": False,
+            "error": previous_error,
+            "code": previous_code,
+            "attempts": attempt
         }

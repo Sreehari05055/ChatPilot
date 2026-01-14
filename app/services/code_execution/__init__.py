@@ -5,7 +5,7 @@ from app.services.code_execution.execution_service import CodeExecutionService
 from app.services.code_execution.csv_handler import CSVHandler
 from app.services.code_execution.file_handler_factory import FileHandlerFactory
 from app.services.code_execution.excel_handler import ExcelHandler
-
+from app.services.code_execution.error_classifier import ErrorClassifier
 __all__ = [
     "CodeExecutionService",
     "CodeGenerator",
@@ -14,4 +14,5 @@ __all__ = [
     "FileHandlerFactory",
     "ExcelHandler",
     "FileHandlerFactory", 
+    "ErrorClassifier",
 ]
