@@ -117,6 +117,7 @@ class CodeGenerator:
         analysis_plan_str = "\n".join(
             f"{i+1}. {step}" for i, step in enumerate(analysis_plan)
         )
+
         task_context = f"""
             analysis_plan (execute in order):
             {analysis_plan_str}

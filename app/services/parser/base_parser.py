@@ -33,7 +33,7 @@ class BaseParser(ABC):
         # 2. Structural cleanup (safe defaults)
         text = clean(
             md_text,
-            fix_unicode=False,   # already handled by ftfy
+            fix_unicode=True,   # already handled by ftfy
             to_ascii=False,
             lower=False,
             no_line_breaks=False,

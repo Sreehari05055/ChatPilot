@@ -45,7 +45,7 @@ admin = AdminConfig(
     rag=RAGConfig(
         chunk_size=512,
         chunk_overlap=50,
-        top_k=5
+        top_k=20
     ),
     max_conversation_turns=10
 )
@@ -57,7 +57,6 @@ class Config:
     WEB_SEARCH_API_KEY = os.getenv("WEB_SEARCH_API_KEY")
     CSE_ID = os.getenv("CSE_ID")
     env_web_search = os.getenv("WEB_SEARCH_ENABLED")
-    DB_TYPE = "file"  # v1: Always use file
     DATA_DIR = os.getenv("DATA_DIR", "source_files/")
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
 

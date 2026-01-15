@@ -52,8 +52,11 @@ def get_system_prompt(tone_style: ToneStyle, context: str = "") -> str:
                 1. **web_search** - Search the web for current events, general knowledge, or real-time information
                 2. **web_fetch** - Fetch and analyze content from specific URLs the user provides
                 3. **analyze_data** - Perform data analysis, statistics, visualizations, or ML on uploaded CSV/Excel files
-                
+                4. **get_info** - Retrieve concise information from the knowledge base for quick facts
+                5. **get_info_with_explanation** - Retrieve detailed information with explanations from the knowledge base
+
                 WHEN TO USE TOOLS:
+                - Use get_info or get_info_with_explanation for ANY questions that you don't have information about. If that doesn't work, only then try web search. 
                 - Use web_search when the user asks about current events, news, or information you don't have
                 - Use web_fetch when the user provides a URL to analyze or asks about a specific webpage
                 - Use analyze_data for ANY questions about uploaded files (check metadata first)

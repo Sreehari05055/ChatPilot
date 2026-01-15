@@ -31,13 +31,12 @@ from fastapi import FastAPI
 from app.core.config import Config
 from slowapi.middleware import SlowAPIMiddleware
 from app.services.chatbot_service import ChatbotService
-from app.services.rag_service import RAGPipeline
+from app.services.rag_service import RAGExecutionService
 from app.services.web.web_search_factory import WebSearchProviderFactory
 from app.services.llm_engine.factory import create_llm_engine
 from app.services.llm_engine.client_factory import build_llm_client
 from app.services.state_manager import FileHistoryStore
 from starlette.middleware.sessions import SessionMiddleware
-import itsdangerous
 from app.services.code_execution.execution_service import CodeExecutionService
 from app.services.web.web_fetch import WebFetchService
 
@@ -67,13 +66,13 @@ def create_app() -> FastAPI:
     llm_client = build_llm_client(provider, Config)
     llm_engine = create_llm_engine(provider, llm_client)
     code_executor = CodeExecutionService(llm_engine)
-    rag_service = RAGPipeline()
+    rag_service = RAGExecutionService(llm_engine=llm_engine)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Initialize RAG index after trees are saved
         try:
-            rag_service.init_index()
+            await rag_service.init_index()
             yield
         finally:
             await http_client.aclose()

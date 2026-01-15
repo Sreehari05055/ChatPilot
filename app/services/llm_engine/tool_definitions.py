@@ -85,7 +85,42 @@ OPENAI_TOOLS = [
                 "required": ["analysis_plan", "task_type"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_info",
+            "description": "Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The specific fact or entity to find."
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_info_with_explanation",
+            "description": "Analyze and connect multiple pieces of information from the knowledge base. Use this for questions that require a reasoned explanation of the data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The theme or question to explain."
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
     }
+
 ]
 
 # Anthropic format (uses 'input_schema' instead of 'parameters')
@@ -159,6 +194,34 @@ ANTHROPIC_TOOLS = [
                 }
             },
             "required": ["analysis_plan", "task_type"]
+        }
+    },
+    {
+    "name": "get_info",
+    "description": "Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough.",
+        "input_schema": {
+        "type": "object",
+        "properties": {
+            "topic": {
+            "type": "string",
+            "description": "The specific fact or entity to find."
+            }
+        },
+        "required": ["topic"]
+        }
+    },
+    {
+        "name": "get_info_with_explanation",
+        "description": "Analyze and connect multiple pieces of information from the knowledge base. Use this for questions that require a reasoned explanation of the data.",
+        "input_schema": {
+        "type": "object",
+        "properties": {
+            "topic": {
+            "type": "string",
+            "description": "The theme or question to explain."
+            }
+        },
+        "required": ["topic"]
         }
     }
 ]

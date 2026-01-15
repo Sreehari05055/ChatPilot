@@ -33,7 +33,7 @@ class ChatbotService:
             pass
         return trimmed
 
-    def _update_system_message(self, context_chunks, file_metadata=None):
+    def _update_system_message(self, context_chunks=None, file_metadata=None):
         """Build system message with RAG context."""
         logger.debug(f"File metadata for system message: {file_metadata}")
         if isinstance(file_metadata, dict) and "file_metadata" in file_metadata:
@@ -93,15 +93,7 @@ class ChatbotService:
             logger.info(f"Uploaded file paths: {uploaded_files}")
             logger.info(f"Uploaded file metadata: {file_metadata}")
 
-            yield f"data: {json.dumps({'status': 'Searching knowledge base...'})}\n\n"
-            try:
-                context_chunks = await self.rag_service._get_corpus_data(query)
-                if context_chunks:
-                    logger.info(f"Retrieved {context_chunks} RAG context chunks")
-            except Exception as e:
-                logger.error(f"RAG failed: {e}")
-
-            current_system_message = self._update_system_message(context_chunks, file_metadata.get("file_metadata", {}))
+            current_system_message = self._update_system_message(file_metadata=file_metadata.get("file_metadata", {}))
             
             new_msg = {"role": "user", "content": query}
             messages.append(new_msg)
@@ -172,18 +164,16 @@ class ChatbotService:
                     await self.store.add_message(self.session_id, assistant_tool_msg)
 
                     try:
+                        args = json.loads(args_str) if args_str.strip() else {}
                         if function_name == "web_search":
-                            args = json.loads(args_str) if args_str.strip() else {}
                             search_query = args.get("question", query)
                             tool_content = await self.web_search_service.run_web_search(search_query)
                             
                         elif function_name == "web_fetch":
-                            args = json.loads(args_str) if args_str.strip() else {}
                             url = args.get("url", "")
                             tool_content = await self.web_fetch_service.fetch_and_parse(url)
                             
                         elif function_name == "analyze_data":
-                            args = json.loads(args_str) if args_str.strip() else {}
                             plan = args["analysis_plan"]
                             task_type = args["task_type"]
                             target = args.get("target_column")
@@ -223,6 +213,12 @@ class ChatbotService:
                                     "If the issue appears related to the input data or request, suggest what they may want to check. "
                                     "If it does not clearly point to a user input issue, explain that it may be an internal problem and suggest trying again later."
                                 )
+                        elif function_name == "get_info":
+                            topic = args.get("topic", query)
+                            tool_content = await self.rag_service.get_info(topic)
+                        elif function_name == "get_info_with_explanation":
+                            topic = args.get("topic", query)
+                            tool_content = await self.rag_service.get_info_with_explanation(topic)
 
                     except Exception as e:
                         logger.error(f"Tool error: {e}")

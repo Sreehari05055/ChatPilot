@@ -1,6 +1,7 @@
 import os
-from app.services.base_data_provider import BaseDataProvider
+from app.services.parser.base_data_provider import BaseDataProvider
 from app.services.parser.parser_factory import ParserFactory
+
 
 from app import logger
 
