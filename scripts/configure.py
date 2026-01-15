@@ -16,8 +16,6 @@ except Exception:
     print("InquirerPy is required. Install with: pip install InquirerPy")
     sys.exit(1)
 
-from dotenv import set_key
-
 ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT / ".env"
 LLM_JSON = ROOT / "configuration" / "llm_models.json"
@@ -31,36 +29,6 @@ def load_models():
         return {}
     with open(LLM_JSON, "r", encoding="utf-8") as f:
         return json.load(f)
-
-def write_env_var(key: str, value: str):
-    """Write or replace a single KEY=VALUE line in the .env file without extra quotes."""
-    # Read existing lines
-    lines = []
-    if ENV_PATH.exists():
-        with open(ENV_PATH, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-    # Filter out existing key
-    prefix = f"{key}="
-    new_lines = [l for l in lines if not l.strip().startswith(prefix)]
-
-    # Append new key=value (no quotes)
-    new_lines.append(f"{key}={value}\n")
-
-    with open(ENV_PATH, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-
-
-def remove_env_var(key: str):
-    """Remove a KEY= line from the .env file if present."""
-    if not ENV_PATH.exists():
-        return
-    with open(ENV_PATH, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    prefix = f"{key}="
-    new_lines = [l for l in lines if not l.strip().startswith(prefix)]
-    with open(ENV_PATH, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
 
 def main():
 
