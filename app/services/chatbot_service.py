@@ -111,14 +111,11 @@ class ChatbotService:
 
             buffer = StringIO()
 
-            for attempt in range(1, Config.MAIN_LLM_MAX_RETRIES + 1):
-                logger.info(f"LLM response attempt {attempt}/{Config.MAIN_LLM_MAX_RETRIES}")
+            while True:
+                tool_calls = []
+                current_tool = None
+                saw_tool_call = False
 
-                function_called = False
-                function_name = None
-                tool_call_id = None
-                function_args = StringIO()
-                
                 stream = await self._gpt_engine(messages=messages, system_prompt=current_system_message)
                 
                 async for chunk in stream:
@@ -130,72 +127,76 @@ class ChatbotService:
                     func = chunk.get("function")
 
                     if ctype == "function_call" or func:
-                        function_called = True
+                        saw_tool_call = True
                         try:
-                            name = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
+                            name = func.get("name")
                             if name:
-                                function_name = name
-                            args_frag = func.get("arguments_fragment") if isinstance(func, dict) else getattr(func, "arguments", None)
-                            if args_frag:
-                                function_args.write(args_frag)
-                            if func.get("id"): tool_call_id = func["id"]
-                        except Exception:
-                            function_args.write(str(func))
+                                current_tool = {
+                                "id": func.get("id"),
+                                "name": name,
+                                "arguments": StringIO()
+                                }
+                                tool_calls.append(current_tool)
+                                
+                            args_frag = func.get("arguments_fragment")
+                            if args_frag and current_tool:
+                                current_tool["arguments"].write(args_frag)
+                            continue
+                        except Exception as e:
+                            logger.error(f"Function Handling Error: {e}")
                         continue
 
-                    if ctype == "delta" and content:
+                    if not saw_tool_call and ctype == "delta" and content:
                         buffer.write(content)
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
                 
-                if not function_called:
+                if not tool_calls:
                     # No function called, break the retry loop
                     break
-
-
-                args_str = function_args.getvalue()
                 
+                for tool in tool_calls:
+                    function_name = tool["name"]
+                    tool_call_id = tool["id"]
+                    args_str = tool["arguments"].getvalue()
 
-                assistant_tool_msg = {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [{
-                        "id": tool_call_id or "call_default",
-                        "type": "function",
-                        "function": {"name": function_name, "arguments": args_str}
-                    }]
-                }
-                messages.append(assistant_tool_msg)
-                await self.store.add_message(self.session_id, assistant_tool_msg)
+                    assistant_tool_msg = {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": tool_call_id or "call_default",
+                            "type": "function",
+                            "function": {"name": function_name, "arguments": args_str}
+                        }]
+                    }
+                    messages.append(assistant_tool_msg)
+                    await self.store.add_message(self.session_id, assistant_tool_msg)
 
-                try:
-                    if function_name == "web_search":
-                        args = json.loads(args_str) if args_str.strip() else {}
-                        search_query = args.get("question", query)
-                        tool_content = await self.web_search_service.run_web_search(search_query)
-                        
-                    elif function_name == "web_fetch":
-                        args = json.loads(args_str) if args_str.strip() else {}
-                        url = args.get("url", "")
-                        tool_content = await self.web_fetch_service.fetch_and_parse(url)
-                        
-                    elif function_name == "analyze_data":
-                        args = json.loads(args_str) if args_str.strip() else {}
-                        plan = args["analysis_plan"]
-                        task_type = args["task_type"]
-                        target = args.get("target_column")
-                        risks = args.get("risk_checks", [])
+                    try:
+                        if function_name == "web_search":
+                            args = json.loads(args_str) if args_str.strip() else {}
+                            search_query = args.get("question", query)
+                            tool_content = await self.web_search_service.run_web_search(search_query)
+                            
+                        elif function_name == "web_fetch":
+                            args = json.loads(args_str) if args_str.strip() else {}
+                            url = args.get("url", "")
+                            tool_content = await self.web_fetch_service.fetch_and_parse(url)
+                            
+                        elif function_name == "analyze_data":
+                            args = json.loads(args_str) if args_str.strip() else {}
+                            plan = args["analysis_plan"]
+                            task_type = args["task_type"]
+                            target = args.get("target_column")
+                            risks = args.get("risk_checks", [])
 
-                        result = await self.code_executor.generate_solution(plan, task_type, file_metadata, target, risks)
-                        logger.debug(f"Code execution result: {result}")
-                        success = bool(result.get("success"))
-                        res = result.get("result")
-                        code = result.get("code", "")
-                        attempts = result.get("attempts", 0)
-                        error = result.get("error")
-                        retryable = error.get("retryable", False)
-                        
-                        if success:
-                            if res:                                
+                            result = await self.code_executor.generate_solution(plan, task_type, file_metadata, target, risks)
+                            logger.debug(f"Code execution result: {result}")
+                            success = bool(result.get("success"))
+                            res = result.get("result")
+                            code = result.get("code", "")
+                            attempts = result.get("attempts", 0)
+
+                            if success:
                                 tool_content = (
                                     "Analysis result:\n\n"
                                     f"Result:\n{res}\n\n"
@@ -204,10 +205,9 @@ class ChatbotService:
                                     f"Attempts: {attempts}"
                                 )
                             else:
-                                tool_content = "Analysis completed but no result was returned."
-                        else:
-                            if error and not retryable:
-                                
+                                error = result.get("error")
+                                retryable = bool(error and error.get("retryable", False))
+                            
                                 error_message = error.get('message', 'Unknown error')
                                 error_category = error.get('category', 'Unknown')
                                 logger.error(
@@ -224,39 +224,9 @@ class ChatbotService:
                                     "If it does not clearly point to a user input issue, explain that it may be an internal problem and suggest trying again later."
                                 )
 
-                                tool_msg = {
-                                    "role": "tool",
-                                    "tool_call_id": tool_call_id or "call_default",
-                                    "name": function_name,
-                                    "content": tool_content
-                                }
-                                messages.append(tool_msg)
-                                await self.store.add_message(self.session_id, tool_msg)
-                                
-                                # Get follow-up explanation from LLM
-                                messages = self._trim_messages(messages)
-                                followup_stream = await self._gpt_engine(
-                                    messages=messages, 
-                                    system_prompt=self._update_system_message([], file_metadata.get("file_metadata", {}))
-                                )
-                                
-                                if followup_stream:
-                                    async for chunk in followup_stream:
-                                        if chunk.get("type") == "delta" and chunk.get("content"):
-                                            buffer.write(chunk["content"])
-                                            yield f"data: {json.dumps({'content': chunk['content']}, ensure_ascii=False)}\n\n"
-                                
-                                # Break out of retry loop after getting final explanation
-                                break
-                            else:
-                                # Retryable error or other case
-                                tool_content = f"Analysis attempt failed: {error.get('message', 'Unknown error') if error else 'Unknown error'}"    
-                
-                except Exception as e:
-                    logger.error(f"Tool error: {e}")
-                    tool_content = f"Error: {str(e)}"
-                
-                if not (function_name == "analyze_data" and error and not retryable):
+                    except Exception as e:
+                        logger.error(f"Tool error: {e}")
+                        tool_content = f"Error: {str(e)}"
                     
                     tool_msg = {
                         "role": "tool",
@@ -268,7 +238,7 @@ class ChatbotService:
                     messages.append(tool_msg)
                     await self.store.add_message(self.session_id, tool_msg)
             
-                    messages = self._trim_messages(messages)
+                messages = self._trim_messages(messages)
 
             # Finalize
             final_response = buffer.getvalue()
