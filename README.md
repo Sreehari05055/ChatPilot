@@ -1,47 +1,67 @@
-# ChatPilot
+# ✈️ ChatPilot
 
-Chat with your documents, search the web, and analyze data files - all in one place.
+ChatPilot is a tool-augmented **Agentic Copilot** that goes beyond simple chat. It utilizes a single AI agent to interact with your local files, conduct deep web research, and perform autonomous data analysis through Python code execution.
+z
+**Demo Frontend:** [ChatPilot Frontend](https://github.com/Sreehari05055/Demo-frontend)
 
-**Demo Frontend:** Try ChatPilot with a UI → [ChatPilot Frontend](https://github.com/Sreehari05055/Demo-frontend)
+---
 
-## What it does
+## 🚀 Key Capabilities
 
-Upload files and ask questions. ChatPilot can:
+### 🧠 Agentic Document Search (RAG)
+Upload PDFs, text files, or Word documents and ask questions. ChatPilot doesn't just retrieve text; it use tools to find and synthesize answers directly from your private knowledge base.
 
-- **Search your documents** (RAG) - Upload PDFs, text files, docs and ask questions. Gets answers from your files.
-- **Search the web** - Pulls in current information and fetches specific URLs when needed.
-- **Analyze data** - Upload CSV/Excel files and ask for analysis. Writes and runs Python code automatically to get you answers.
+### 📊 Autonomous Data Analysis
+Upload CSV or Excel files and ask for insights. ChatPilot functions as a **Data Analyst Agent**:
+- **Planning**: Formulates a step-by-step analysis strategy.
+- **Execution**: Writes and runs Python code in a secure sandbox.
+- **Self-Correction**: If the code fails, the agent analyzes the error and automatically retries until it gets the result.
 
-All of this works in a normal conversation. Ask follow-ups, combine different sources, whatever you need.
+### 🌐 Smart Web Research
+Powered by **Tavily** and **Google Search**, the agent can:
+- **Search**: Stay updated with real-time news and general knowledge.
+- **Deep Research**: Conduct multi-source deep dives to generate comprehensive reports.
+- **Web Fetch**: Extract and clean content from specific URLs to process them as context.
 
-## How it works
+### 🔓 Multi-LLM Flexibility
+Built on **LangChain**, ChatPilot supports switching between top providers. Use the same agent with your preferred model provider:
+- OpenAI 
+- Anthropic 
+- DeepSeek
+- Google (Gemini)
+- Local models via Ollama
 
-- Built with FastAPI and async streaming
-- Currently supports OpenAI, Claude, DeepSeek (Gemini and Ollama support coming soon)
-- Uses vector search for documents
-- Runs Python code in a sandbox for data analysis
-- Keeps conversation history so you can ask follow-ups naturally
+---
 
-## Examples
+## 🛠️ Tech Stack
 
-- "What does the report say about Q3 revenue?"
-- "Find the ship with highest engine efficiency" (from CSV)
-- "What's the latest Python release?" (web search)
-- Upload docs + ask "How does this compare to industry standards?" (uses both files and web)
-- "Build a model to predict customer churn" (does EDA, preprocessing, trains model, saves pipeline)
+- **Backend**: FastAPI (Python 3.10+)
+- **Orchestration**: LangChain (Full tool-calling support)
+- **Data Agent**: LangGraph (For iterative code execution and self-correction)
+- **Vector Store**: ChromaDB
+- **Tools**: Tavily API, Google Custom Search, Python Sandbox
 
-## Setup
+---
 
-- Check the docs/ directory for setup and installation instructions.
+## 🏁 Getting Started
 
-## Tech
+1. **Setup Environment**:
+   Copy `.env.example` to `.env` and add your API keys.
+   ```bash
+   cp .env.example .env
+   ```
 
-- FastAPI backend with streaming
-- Vector database for document search
-- Sandboxed Python execution for data analysis
-- Multi-LLM support (OpenAI/Claude/DeepSeek)
-- Tool system for web search, web fetch and code execution
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## License
+3. **Run the Server**:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
 
+---
+
+## 📜 License
 Apache-2.0
