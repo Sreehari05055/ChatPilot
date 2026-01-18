@@ -4,10 +4,18 @@ from typing import List, Optional, Literal
 class WebSearch(BaseModel):
     """Search the web for general knowledge, current events, or information NOT related to uploaded files. Do NOT use this for analyzing uploaded data."""
     question: str = Field(description="The user's question to be rephrased and web searched.")
-
+    topic: Optional[Literal["general", "news", "finance"]] = Field(default="general", description="The search category. Use 'news' or 'finance' for more specialized results.")
+    time_range: Optional[Literal["day", "week", "month", "year"]] = Field(default=None, description="The time range to restrict search results to.")
+    start_date: Optional[str] = Field(default=None, description="Start date for search results (YYYY-MM-DD format).")
+    end_date: Optional[str] = Field(default=None, description="End date for search results (YYYY-MM-DD format).")
+    
 class WebFetch(BaseModel):
     """Fetch and analyze the content of a specific URL provided by the user."""
     url: str = Field(description="The exact URL to fetch content from.")
+
+class WebResearch(BaseModel):
+    """Perform deep, agentic research on a complex topic. Use this when the user asks for a 'deep dive', 'thorough report', or a detailed analysis of a current event or complex subject."""
+    topic: str = Field(description="The complex topic or question that requires a multi-step research report.")
 
 class AnalyzeData(BaseModel):
     """REQUIRED for ANY questions about uploaded CSV/Excel files. Use this to perform data analysis, statistics, visualizations, filtering, aggregations, or machine learning on uploaded data. Check the UPLOADED FILE METADATA in the system message."""
@@ -50,6 +58,7 @@ def get_tool_schemas():
     return [
         WebSearch,
         WebFetch,
+        WebResearch,
         AnalyzeData,
         GetInfo,
         GetInfoWithExplanation,

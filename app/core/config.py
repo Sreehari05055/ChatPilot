@@ -52,11 +52,10 @@ admin = AdminConfig(
 
 class Config:
     LLM_PROVIDER = os.getenv("LLM_PROVIDER")
-    WEB_SEARCH_ENABLED = os.getenv("WEB_SEARCH_ENABLED")
     LLM_API_KEY = os.getenv("LLM_API_KEY")
     WEB_SEARCH_API_KEY = os.getenv("WEB_SEARCH_API_KEY")
     CSE_ID = os.getenv("CSE_ID")
-    env_web_search = os.getenv("WEB_SEARCH_ENABLED")
+    TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
     DATA_DIR = os.getenv("DATA_DIR", "source_files/")
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
 
@@ -78,12 +77,12 @@ class Config:
         # Conversation settings
         MAX_CONVERSATION_TURNS = admin.max_conversation_turns
         
-        HTTP_TIMEOUT = 30  # seconds
-        WEB_SEARCH_NUM_RESULTS = 5
+        HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", 30.0))  # seconds
+        WEB_SEARCH_NUM_RESULTS = int(os.getenv("WEB_SEARCH_NUM_RESULTS", 5))
         EMBEDDING_DIM = 1024  # Dimension for BGE-2.0 models
         EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"
         COLLECTION_NAME = "chat_collection"
-        EXEC_MAX_RETRIES = 3
+        EXEC_MAX_RETRIES = int(os.getenv("EXEC_MAX_RETRIES", 3))
 
     except Exception as e:
         logger.error(f"Error in configuration: {e}")

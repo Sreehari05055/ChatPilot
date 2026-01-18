@@ -41,7 +41,7 @@ class FileHistoryStore(BaseHistoryStore):
     def _save_metadata(self):
         """Persist metadata to disk"""
         try:
-            sanitized = FileHistoryStore._sanitize_for_json(self.metadata)
+            sanitized = self._sanitize_for_json(self.metadata)
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(sanitized, f, indent=2, allow_nan=False)
         except Exception as e:
@@ -184,8 +184,7 @@ class FileHistoryStore(BaseHistoryStore):
         """Get metadata for specific session"""
         return os.path.join(self._get_session_dir(session_id), "metadata.json")
     
-    @staticmethod
-    def _sanitize_for_json(obj):
+    def _sanitize_for_json(self, obj):
         # None stays None
         if obj is None:
             return None
@@ -193,14 +192,14 @@ class FileHistoryStore(BaseHistoryStore):
         # Dict: recurse into values
         if isinstance(obj, dict):
             return {
-                k: FileHistoryStore._sanitize_for_json(v)
+                k: self._sanitize_for_json(v)
                 for k, v in obj.items()
             }
 
         # Iterable containers
         if isinstance(obj, (list, tuple, set)):
             return [
-                FileHistoryStore._sanitize_for_json(v)
+                self._sanitize_for_json(v)
                 for v in obj
             ]
 
@@ -215,7 +214,7 @@ class FileHistoryStore(BaseHistoryStore):
 
             # NumPy arrays
             if isinstance(obj, np.ndarray):
-                return FileHistoryStore._sanitize_for_json(obj.tolist())
+                return self._sanitize_for_json(obj.tolist())
 
         # Native float NaN
         if isinstance(obj, float) and math.isnan(obj):
@@ -258,7 +257,7 @@ class FileHistoryStore(BaseHistoryStore):
             session_data["file_metadata"].update(file_metadata)
 
         try:
-            sanitized = FileHistoryStore._sanitize_for_json(session_data)
+            sanitized = self._sanitize_for_json(session_data)
             with open(session_meta_path, "w", encoding="utf-8") as f:
                 json.dump(sanitized, f, indent=2, ensure_ascii=False)
         except Exception as e:

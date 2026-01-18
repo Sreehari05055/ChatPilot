@@ -7,24 +7,28 @@ from app.services.langchain_handler.langchain_service import LangChainService
 from app.services.langchain_handler.tool_definitions import get_tool_schemas
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage, BaseMessage
 from langchain_core.output_parsers import StrOutputParser
+import os   
 
 config = Config()
 
 class ChatbotService:
-    def __init__(self, system_prompt: str, store, session_id: str, tool_executor):
+    def __init__(self, system_prompt: str, store, session_id: str, http_client):
+        from app.services.langchain_handler.tool_executor import ToolExecutor
         self.system_prompt = system_prompt
         self.store = store
         self.session_id = session_id
-        self.tool_executor = tool_executor
+        self.http_client = http_client
+        self.tool_executor = ToolExecutor(http_client=http_client)
         self.llm = LangChainService.get_llm()
         self.tools = get_tool_schemas()
         self.llm_with_tools = self.llm.bind_tools(self.tools)
 
-    def _update_system_message(self, context_chunks=None, file_metadata=None):
+    def _update_system_message(self, context_chunks=None, file_context=None):
         """Build system message with RAG context."""
-        logger.debug(f"File metadata for system message: {file_metadata}")
-        if isinstance(file_metadata, dict) and "file_metadata" in file_metadata:
-            file_metadata = file_metadata["file_metadata"]
+        file_context = file_context or {}
+        file_metadata = file_context.get("file_metadata", {})
+        file_paths = file_context.get("file_paths", [])
+        
         formatted_context = "No relevant knowledge base entries found."
         if context_chunks:
             if isinstance(context_chunks, list):
@@ -34,11 +38,19 @@ class ChatbotService:
 
         msg = self.system_prompt.replace("{context}", formatted_context)
 
+        # List files even if metadata doesn't exist yet
+        # If metadata exists, use those keys (friendly names), otherwise use base filenames
+        display_files = []
         if file_metadata:
-            msg += "\n\nAVAILABLE FILES:\n"
-            for filename in file_metadata.keys():
+            display_files = list(file_metadata.keys())
+        elif file_paths:
+            display_files = file_paths
+
+        if display_files:
+            msg += "\n\nAVAILABLE FILES (Paths):\n"
+            for filename in display_files:
                 msg += f"- {filename}\n"
-            msg += "\nIf you need to know the columns, data types, or row counts for any of these files, you MUST use the 'extract_metadata' tool."
+            msg += "\nIf you need to know the columns, data types, or row counts for any of these files, you MUST use the 'extract_metadata' tool with the exact paths listed above."
         return msg
 
     def _convert_to_langchain_messages(self, stored_messages: List[Dict[str, Any]]) -> List[BaseMessage]:
@@ -80,8 +92,7 @@ class ChatbotService:
             stored_msgs = await self.store.get_messages(self.session_id)
             
             file_metadata_full = await self.store.get_session_metadata(self.session_id)
-            file_metadata = file_metadata_full.get("file_metadata", {})
-            current_system_msg = self._update_system_message(file_metadata=file_metadata)
+            current_system_msg = self._update_system_message(file_context=file_metadata_full)
 
             # 3. Prepare User Message
             user_msg = {"role": "user", "content": query}
@@ -146,7 +157,9 @@ class ChatbotService:
                         tool_result_content = await self.tool_executor.execute(
                             tool_name, 
                             json.dumps(tool_args), 
-                            file_metadata_full
+                            file_metadata_full,
+                            self.session_id,
+                            self.store
                         )
                         
                         # Create Tool Message

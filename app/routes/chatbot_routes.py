@@ -21,7 +21,7 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return PlainTextResponse("Rate limit exceeded", status_code=HTTP_429_TOO_MANY_REQUESTS)
 
 
-def init_chatbot_routes(app, system_prompt, history_store, tool_executor, code_executor):
+def init_chatbot_routes(app, system_prompt, history_store, http_client):
 
     @chatbot_bp.post('/api/chat', response_class=StreamingResponse)
     @limiter.limit("10/minute")
@@ -62,8 +62,7 @@ def init_chatbot_routes(app, system_prompt, history_store, tool_executor, code_e
                 # Save files to session's upload directory
                 if files:
                     saved_paths = await history_store.save_uploaded_files(session_id, files)
-                    file_metadata = await code_executor.analyze_files(saved_paths)
-                    await history_store.save_session_metadata(session_id, file_paths=saved_paths, file_metadata=file_metadata)
+                    await history_store.save_session_metadata(session_id, file_paths=saved_paths)
             else:
                 body = await request.json()
                 question = body.get('question')
@@ -76,7 +75,7 @@ def init_chatbot_routes(app, system_prompt, history_store, tool_executor, code_e
                 system_prompt=system_prompt, 
                 store=history_store, 
                 session_id=session_id, 
-                tool_executor=tool_executor
+                http_client=http_client
             )
 
             async def event_stream():
