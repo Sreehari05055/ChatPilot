@@ -1,5 +1,5 @@
 from platform import node
-from typing import List
+from typing import List, Union
 from app import logger
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import Document, StorageContext
@@ -26,9 +26,13 @@ class RAGPipeline:
             model="BAAI/bge-reranker-v2-m3", 
             top_n=3
         )
-    async def _get_corpus_data(self, question: str) -> list:
+    async def _get_corpus_data(self, questions: Union[str, List[str]]) -> list:
         """
-        Retrieve top-k relevant context chunks for a question using LlamaIndex.
+        Retrieve top-k relevant context chunks for a question or list of questions using LlamaIndex.
+
+        If `questions` is a string, returns a list of context chunks for that question.
+        If `questions` is a list of strings, returns a list where each element is the
+        list of context chunks for the corresponding question.
         """
         try:
             if self.index is None:
@@ -36,25 +40,32 @@ class RAGPipeline:
 
             retriever = self.index.as_retriever(similarity_top_k=config.TOP_K)
 
-            if hasattr(retriever, "aretrieve"):
-                results = await retriever.aretrieve(question)
-            else:
-                # Fallback for sync-only retriever
-                results = await asyncio.to_thread(retriever.retrieve, question)
+            single_input = isinstance(questions, str)
+            question_list = [questions] if single_input else questions
+
+            sem = asyncio.Semaphore(getattr(config, "MAX_CONCURRENT_QUERIES", 8))
             
-            query_bundle = QueryBundle(question)
-            reranked_nodes = self.reranker.postprocess_nodes(
-                results, query_bundle=query_bundle
-            )
+            async def _retrieve_and_rerank(q:str) -> List[str]:
+                async with sem:
+                    if hasattr(retriever, "aretrieve"):
+                        results = await retriever.aretrieve(q)
+                    else:
+                        # Fallback for sync-only retriever
+                        results = await asyncio.to_thread(retriever.retrieve, q)
 
-            context_chunks = []
-            for item in reranked_nodes:
-                node = item.node
-                content_for_llm = node.get_content(metadata_mode=MetadataMode.LLM)
-                context_chunks.append(content_for_llm)
+                    query_bundle = QueryBundle(q)
+                    reranked_nodes = await asyncio.to_thread(
+                        self.reranker.postprocess_nodes, results, query_bundle=query_bundle
+                    )
+                    return [
+                        item.node.get_content(metadata_mode=MetadataMode.LLM)
+                        for item in reranked_nodes
+                    ]
+            tasks = [asyncio.create_task(_retrieve_and_rerank(q)) for q in question_list]
+            all_results = await asyncio.gather(*tasks)
 
-            return context_chunks
-        
+            return all_results[0] if single_input else all_results
+
         except Exception as e:
             logger.error(f"Error retrieving corpus data: {e}", exc_info=True)
             raise

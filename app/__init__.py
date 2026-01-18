@@ -3,11 +3,8 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from slowapi.util import get_remote_address
-import openai
 import httpx
-import asyncio
 from slowapi import Limiter
-import json
 
 # Ensure `configuration/admin_config.json` exists at startup with sensible defaults
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,15 +27,13 @@ logger.setLevel(logging.DEBUG)
 from fastapi import FastAPI
 from app.core.config import Config
 from slowapi.middleware import SlowAPIMiddleware
-from app.services.chatbot_service import ChatbotService
 from app.services.rag_service import RAGExecutionService
 from app.services.web.web_search_factory import WebSearchProviderFactory
-from app.services.llm_engine.factory import create_llm_engine
-from app.services.llm_engine.client_factory import build_llm_client
 from app.services.state_manager import FileHistoryStore
 from starlette.middleware.sessions import SessionMiddleware
 from app.services.code_execution.execution_service import CodeExecutionService
 from app.services.web.web_fetch import WebFetchService
+from app.services.langchain_handler.tool_executor import ToolExecutor
 
 # Ensure application data directories exist (after Config import)
 if not os.path.exists(Config.DATA_DIR):
@@ -57,16 +52,16 @@ def create_app() -> FastAPI:
     http_client = httpx.AsyncClient()
     web_search_service = WebSearchProviderFactory.get_provider(Config, http_client)
     web_fetch_service = WebFetchService()
-    # Build provider-specific LLM client and engine, then inject into services
-    provider = getattr(Config, "LLM_PROVIDER", None)
-    if not provider:
-        logger.error("LLM_PROVIDER is not configured in Config; please set it explicitly.")
-        raise RuntimeError("LLM_PROVIDER is not configured; no default provider allowed.")
     
-    llm_client = build_llm_client(provider, Config)
-    llm_engine = create_llm_engine(provider, llm_client)
-    code_executor = CodeExecutionService(llm_engine)
-    rag_service = RAGExecutionService(llm_engine=llm_engine)
+    # Initialize services (now LangChain based, so no explicit engine injection needed)
+    code_executor = CodeExecutionService() # Internally uses CodeGenerator with LangChain
+    rag_service = RAGExecutionService() # Internally uses RAGSummarizer with LangChain
+    tool_executor = ToolExecutor(
+        web_search_service,
+        web_fetch_service,
+        code_executor,
+        rag_service
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -86,7 +81,8 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowAPIMiddleware)
 
     from app.routes.chatbot_routes import init_chatbot_routes
-    init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, rag_service, Config.system_prompt, history_store, code_executor )
+    # Update signature call
+    init_chatbot_routes(app, Config.system_prompt, history_store, tool_executor, code_executor)
 
     return app
 

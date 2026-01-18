@@ -21,7 +21,7 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return PlainTextResponse("Rate limit exceeded", status_code=HTTP_429_TOO_MANY_REQUESTS)
 
 
-def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, rag_service, system_prompt, history_store, code_executor):
+def init_chatbot_routes(app, system_prompt, history_store, tool_executor, code_executor):
 
     @chatbot_bp.post('/api/chat', response_class=StreamingResponse)
     @limiter.limit("10/minute")
@@ -71,7 +71,13 @@ def init_chatbot_routes(app, llm_engine, web_search_service, web_fetch_service, 
             if not question:
                 raise ValueError("Question field is required.")
             
-            chatbot_service = ChatbotService(llm_engine, web_search_service, web_fetch_service, rag_service, system_prompt, store=history_store, session_id=session_id, code_executor=code_executor)
+            # Instantiating ChatbotService with new signature
+            chatbot_service = ChatbotService(
+                system_prompt=system_prompt, 
+                store=history_store, 
+                session_id=session_id, 
+                tool_executor=tool_executor
+            )
 
             async def event_stream():
                 # Files persist for multi-turn conversations

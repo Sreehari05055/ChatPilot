@@ -1,16 +1,20 @@
-# code_generator.py
 from app.core.config import Config
 from app import logger
+from app.services.langchain_handler.langchain_service import LangChainService
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+
 class CodeGenerator:
-    def __init__(self, llm_engine):
-        self.llm_engine = llm_engine
+    def __init__(self):
+        # We fetch the LLM on demand or store it. 
+        # Since config might change per request in some architectures (not here), 
+        # on demand is safer, but here it's global config.
+        # We'll just instantiate the service wrapper or use it statically.
+        pass
     
     async def generate_code(self, analysis_plan: list[str], task_type: str, metadata: dict, target_column: str | None = None, risk_checks: list[str] | None = None, previous_code: str = None, previous_error: str = None) -> str:
         """Makes LLM call to generate Python code."""
-        # System prompt with metadata
-        # LLM call
-        # Returns code as string
-        system_prompt = f"""
+        
+        system_prompt_text = f"""
         You are a Python code generator that creates data analysis and machine learning code.
 
         Below is the file metadata, including:
@@ -132,27 +136,21 @@ class CodeGenerator:
             {", ".join(risk_checks) if risk_checks else "none"}
         """
 
-        messages = [{"role": "user", "content": task_context}]
+        messages = [
+            SystemMessage(content=system_prompt_text),
+            HumanMessage(content=task_context)
+        ]
 
         if previous_error and previous_code:
             # Add previous attempt to conversation
-            messages.append({"role": "assistant", "content": previous_code})
-            messages.append({"role": "user", "content": f"ERROR:\n{previous_error}\n\nFix the code."})
-        
-        # Use higher token limit for code generation
+            messages.append(AIMessage(content=previous_code)) # Treating as user or AI? Usually AI, but here context for fix.
+
+            messages.append(HumanMessage(content=f"ERROR:\n{previous_error}\n\nFix the code."))
+
         code_gen_max_tokens = max(Config.MAX_TOKENS, 4000)
         
-        response = await self.llm_engine._gpt_engine_stream(messages=messages, system_prompt=system_prompt, model=Config.MODEL_NAME, top_p=Config.TOP_P, max_completion_tokens=code_gen_max_tokens, temperature=Config.TEMPERATURE, stream=False, use_tools=False)
-        logger.info(f"generated code: {response}")
+        llm = LangChainService.get_llm(model_name=Config.MODEL_NAME) 
+
         
-        # Handle OpenAI format
-        if hasattr(response, "choices") and response.choices:
-            return response.choices[0].message.content or ""
-        
-        # Handle Anthropic format
-        if hasattr(response, "content") and response.content:
-            for block in response.content:
-                if hasattr(block, "text"):
-                    return block.text
-        
-        return ""
+        response = await llm.ainvoke(messages)
+        return response.content

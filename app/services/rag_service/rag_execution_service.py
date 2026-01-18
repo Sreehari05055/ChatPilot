@@ -4,9 +4,9 @@ import asyncio
 from app import logger
 
 class RAGExecutionService:
-    def __init__(self, llm_engine):
+    def __init__(self):
         self.rag_pipeline = RAGPipeline()
-        self.rag_summarizer = RAGSummarizer(llm_engine)
+        self.rag_summarizer = RAGSummarizer()
 
     async def init_index(self):
         await self.rag_pipeline._build_index()
@@ -18,10 +18,10 @@ class RAGExecutionService:
         formatted_context = "\n\n---\n\n".join(context_list)
         return formatted_context
     
-    async def get_info_with_explanation(self, query):
-        logger.info(f"Fetching summarized knowledge for query: {query}")
-        knowledge = await self.rag_pipeline._get_corpus_data(query)
-        formatted_knowledge = "\n\n---\n\n".join(knowledge)
+    async def get_info_with_explanation(self, queries:list[str]):
+        logger.info(f"Fetching summarized knowledge for query: {queries}")
+        knowledge = await self.rag_pipeline._get_corpus_data(queries)
+        formatted_knowledge = "\n\n---\n\n".join("\n\n---\n\n".join(k) for k in knowledge)
         logger.info(f"Retrieved {formatted_knowledge} for summarization.")
-        summarized_knowledge = await self.rag_summarizer.summarize(formatted_knowledge, query)
+        summarized_knowledge = await self.rag_summarizer.summarize(formatted_knowledge, queries)
         return summarized_knowledge

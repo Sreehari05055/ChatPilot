@@ -61,7 +61,7 @@ class Config:
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
 
     try:
-        system_prompt = get_system_prompt(ToneStyle.CONCISE)
+        system_prompt = get_system_prompt(ToneStyle.PROFESSIONAL)
         MODEL_NAME = os.getenv("MODEL_NAME")
 
         # Model settings (from AdminConfig)
@@ -84,7 +84,6 @@ class Config:
         EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"
         COLLECTION_NAME = "chat_collection"
         EXEC_MAX_RETRIES = 3
-        MAIN_LLM_MAX_RETRIES = 2
 
     except Exception as e:
         logger.error(f"Error in configuration: {e}")

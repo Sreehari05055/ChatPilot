@@ -4,6 +4,7 @@ import tempfile
 import sys
 import os
 import traceback
+from app import logger
 from app.core.config import Config
 
 class CodeSandboxExecutor:
@@ -27,10 +28,21 @@ class CodeSandboxExecutor:
             proc = subprocess.run([sys.executable, tmp_path], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=Config.HTTP_TIMEOUT)
 
             success = proc.returncode == 0
+            output = proc.stdout.strip()
+
+            logger.info(f"Code executed with return code {proc.returncode}")
+            logger.debug(f"Code execution stdout: {proc.stdout}")
+            logger.debug(f"Code execution stderr: {proc.stderr}")
+
             if success:
+                if not output and proc.stderr.strip():
+                    stderr_content = proc.stderr.strip()
+                    if not any(word in stderr_content.lower() for word in ['error', 'exception', 'traceback', 'warning']):
+                        output = stderr_content
+                
                 return {
-                    'success': success,
-                    'result': proc.stdout.strip(),
+                    'success': True,
+                    'result': output,
                     'error': None,
                     'returncode': proc.returncode,
                 }
