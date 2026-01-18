@@ -13,3 +13,9 @@ lxml
 python-docx
 clean-text
 ftfy
+langchain
+langchain-community
+langchain-openai
+langchain-anthropic
+langgraph
+slowapi
