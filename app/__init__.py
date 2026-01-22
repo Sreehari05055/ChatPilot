@@ -52,9 +52,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         try:
-            from app.services.rag_service.rag_execution_service import RAGExecutionService
-            rag_service = RAGExecutionService()
-            await rag_service.init_index()
+            await RAGExecutionService().init_index()
             yield
         finally:
             await http_client.aclose()

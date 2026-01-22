@@ -21,7 +21,6 @@ class ToolExecutor:
                 "WebResearch": self._execute_web_research,
                 "AnalyzeData": self._execute_analyze_data,
                 "GetInfo": self._execute_get_info,
-                "GetInfoWithExplanation": self._execute_get_info_with_explanation,
                 "ExtractMetadata": self._execute_extract_metadata,
                 "GenerateCode": self._execute_generate_code,
                 "ExecuteCode": self._execute_code,
@@ -31,7 +30,6 @@ class ToolExecutor:
                 "web_research": self._execute_web_research,
                 "analyze_data": self._execute_analyze_data,
                 "get_info": self._execute_get_info,
-                "get_info_with_explanation": self._execute_get_info_with_explanation,
                 "extract_metadata": self._execute_extract_metadata,
                 "generate_code": self._execute_generate_code,
                 "execute_code": self._execute_code,
@@ -71,9 +69,6 @@ class ToolExecutor:
 
     async def _execute_get_info(self, args, ctx):
         return await self.rag_service.get_info(args.get("topic"))
-
-    async def _execute_get_info_with_explanation(self, args, ctx):
-        return await self.rag_service.get_info_with_explanation(args.get("topics", []))
 
     async def _execute_extract_metadata(self, args, ctx):
         """

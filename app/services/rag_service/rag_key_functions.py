@@ -16,11 +16,9 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core import Settings
 
 config = Config()
-#data_provider = get_data_provider(config)
-
 class RAGPipeline:
+    index = None
     def __init__(self):
-        self.index = None
         self.embed_model = HuggingFaceEmbedding(model_name=config.EMBEDDING_MODEL_NAME)
         self.reranker = SentenceTransformerRerank(
             model="BAAI/bge-reranker-v2-m3", 
@@ -35,10 +33,10 @@ class RAGPipeline:
         list of context chunks for the corresponding question.
         """
         try:
-            if self.index is None:
+            if RAGPipeline.index is None:
                 raise RuntimeError("Index not initialized")
 
-            retriever = self.index.as_retriever(similarity_top_k=config.TOP_K)
+            retriever = RAGPipeline.index.as_retriever(similarity_top_k=config.TOP_K)
 
             single_input = isinstance(questions, str)
             question_list = [questions] if single_input else questions
@@ -112,16 +110,16 @@ class RAGPipeline:
             
             if chroma_collection.count() > 0:
                 logger.info("Existing index found. Loading from persistent storage.")
-                self.index = VectorStoreIndex.from_vector_store(
+                RAGPipeline.index = VectorStoreIndex.from_vector_store(
                     vector_store, embed_model=self.embed_model
                 )
-                refreshed_ids = self.index.refresh_ref_docs(documents)
+                refreshed_ids = RAGPipeline.index.refresh_ref_docs(documents)
                 if any(refreshed_ids):
                     logger.info(f"Updated index with changed pages: {refreshed_ids}")
                 else:
                     logger.info("No changes detected in files. Index is up to date.")
             else:
-                self.index = VectorStoreIndex(
+                RAGPipeline.index = VectorStoreIndex(
                     documents,
                     storage_context=storage_context,
                     embed_model=self.embed_model,

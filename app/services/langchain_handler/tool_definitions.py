@@ -35,11 +35,7 @@ class AnalyzeData(BaseModel):
 
 class GetInfo(BaseModel):
     """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough."""
-    topic: str = Field(description="The specific fact or entity to find.")
-
-class GetInfoWithExplanation(BaseModel):
-    """Analyze and connect multiple pieces of information from the knowledge base. Use this for questions that require a reasoned explanation of the data."""
-    topics: List[str] = Field(description="Sub-topics to search before synthesizing.")
+    topic: List[str] = Field(description="The specific fact or entity to find.")
 
 class ExtractMetadata(BaseModel):
     """Extract column names, types, and summary info from specific uploaded files."""
@@ -61,7 +57,6 @@ def get_tool_schemas():
         WebResearch,
         AnalyzeData,
         GetInfo,
-        GetInfoWithExplanation,
         ExtractMetadata,
         GenerateCode,
         ExecuteCode
