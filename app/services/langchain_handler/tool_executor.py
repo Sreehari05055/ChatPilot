@@ -24,7 +24,7 @@ class ToolExecutor:
                 "GetInfoWithExplanation": self._execute_get_info_with_explanation,
                 "ExtractMetadata": self._execute_extract_metadata,
                 "GenerateCode": self._execute_generate_code,
-                "ExecuteCode": self._execute_execute_code,
+                "ExecuteCode": self._execute_code,
                 # snake_case mapping
                 "web_search": self._execute_web_search,
                 "web_fetch": self._execute_web_fetch,
@@ -34,7 +34,7 @@ class ToolExecutor:
                 "get_info_with_explanation": self._execute_get_info_with_explanation,
                 "extract_metadata": self._execute_extract_metadata,
                 "generate_code": self._execute_generate_code,
-                "execute_code": self._execute_execute_code,
+                "execute_code": self._execute_code,
             }
 
             args = json.loads(args_str) if args_str.strip() else {}
@@ -151,7 +151,7 @@ class ToolExecutor:
         result_state = await self.code_executor.analysis_graph.generate_code_node(temp_state)
         return result_state.get("generated_code", "")
 
-    async def _execute_execute_code(self, args, ctx):
+    async def _execute_code(self, args, ctx):
         """Direct code execution using the graph node."""
         temp_state = {"generated_code": args.get("code", "")}
         result_state = await self.code_executor.analysis_graph.execute_code_node(temp_state)
