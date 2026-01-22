@@ -2,16 +2,17 @@ import httpx
 from app import logger
 from app.core.config import Config
 from app.services.web.base_web_search_service import BaseWebSearchService
-from tavily import TavilyClient
+from tavily import AsyncTavilyClient
 from datetime import datetime
+import asyncio
 
 class TavilyWebSearchService(BaseWebSearchService):
     def __init__(self):
-        self.tavily_client = TavilyClient(api_key=Config.TAVILY_API_KEY)
+        self.tavily_client = AsyncTavilyClient(api_key=Config.TAVILY_API_KEY)
 
     async def run_web_search(self, query, num_results=Config.WEB_SEARCH_NUM_RESULTS, topic="general", time_range=None, start_date: str = None, end_date: str = None) -> str:
         try:
-            response = self.tavily_client.search(
+            response = await self.tavily_client.search(
                 query=query, 
                 topic=topic,
                 max_results=num_results,
@@ -39,7 +40,7 @@ class TavilyWebSearchService(BaseWebSearchService):
     async def web_fetch(self, url: str) -> str:
         """Use Tavily Extract API to get clean content."""
         try:
-            response = self.tavily_client.extract(
+            response = await self.tavily_client.extract(
                 urls=[url],
                 max_results=Config.WEB_SEARCH_NUM_RESULTS,
                 extract_depth="advanced",
@@ -65,27 +66,51 @@ class TavilyWebSearchService(BaseWebSearchService):
 
     async def web_research(self, query: str) -> str:
         try:
-            # Tavily research returns a structured report and sources.
-            response = self.tavily_client.research(
-                query=query,
+            # Initial research request
+            initial_response = await self.tavily_client.research(
+                input=query,
                 model="mini"
             )
             
-            content = response.get("content", "")
-            sources = response.get("sources", [])
+            request_id = initial_response.get("request_id")
+            if not request_id:
+                logger.error(f"Tavily research failed to start: {initial_response}")
+                return "Failed to initiate research task."
+
+            # Polling loop
+            max_retries = 30 # Up to 1 minute (30 * 2s)
+            poll_count = 0
             
-            if not content:
-                logger.error(f"Tavily research error: {response}")
-                return "No research content found."
-            
-            formatted_sources = []
-            for s in sources:
-                title = s.get("title", "Unknown Source")
-                url = s.get("url", "")
-                formatted_sources.append(f"- {title}: {url}")
-            
-            sources_str = "\n".join(formatted_sources)
-            return f"RESEARCH REPORT:\n\n{content}\n\nSOURCES:\n{sources_str}"
+            while poll_count < max_retries:
+                logger.info(f"⏳ Polling Tavily research... (Attempt {poll_count + 1})")
+                response = await self.tavily_client.get_research(request_id)
+                
+                status = response.get("status")
+                if status == "completed":
+                    content = response.get("content", "")
+                    sources = response.get("sources", [])
+                    
+                    if not content:
+                        return "Research completed but returned no content."
+                    
+                    formatted_sources = []
+                    for s in sources:
+                        title = s.get("title", "Unknown Source")
+                        url = s.get("url", "")
+                        formatted_sources.append(f"- {title}: {url}")
+                    
+                    sources_str = "\n".join(formatted_sources)
+                    return f"RESEARCH REPORT:\n\n{content}\n\nSOURCES:\n{sources_str}"
+                
+                elif status == "failed":
+                    logger.error(f"Tavily research task failed: {response}")
+                    return "Research task failed during processing."
+                
+                # Still pending
+                poll_count += 1
+                await asyncio.sleep(2)  # Wait 2 seconds before polling again
+                
+            return "Research timed out. The report is taking longer than expected."
 
         except Exception as e:
             logger.error(f"Tavily research failed: {e}", exc_info=True)
