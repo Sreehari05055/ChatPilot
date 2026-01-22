@@ -38,19 +38,27 @@ class ChatbotService:
 
         msg = self.system_prompt.replace("{context}", formatted_context)
 
-        # List files even if metadata doesn't exist yet
-        # If metadata exists, use those keys (friendly names), otherwise use base filenames
-        display_files = []
-        if file_metadata:
-            display_files = list(file_metadata.keys())
-        elif file_paths:
-            display_files = file_paths
+        msg = self.system_prompt.replace("{context}", formatted_context)
 
-        if display_files:
-            msg += "\n\nAVAILABLE FILES (Paths):\n"
-            for filename in display_files:
-                msg += f"- {filename}\n"
-            msg += "\nIf you need to know the columns, data types, or row counts for any of these files, you MUST use the 'extract_metadata' tool with the exact paths listed above."
+        # Ensure all existing files are listed, regardless of metadata status
+        if file_paths:
+            msg += "\n\nAVAILABLE FILES (Session Context):\n"
+            for i, path in enumerate(file_paths):
+                filename = os.path.basename(path)
+                meta_tag = ""
+                
+                # Check if we have metadata for this path
+                if path in file_metadata:
+                    meta_tag = " [Full Schema Available]"
+                elif filename in file_metadata: 
+                    meta_tag = " [Full Schema Available]"
+                else:
+                    meta_tag = " [Path Only - Use 'extract_metadata' to see columns]"
+                
+                msg += f"- {path}{meta_tag}\n"
+            
+            msg += "\nTo analyze or get details for any file, use 'extract_metadata' with the exact paths listed above."
+        
         return msg
 
     def _convert_to_langchain_messages(self, stored_messages: List[Dict[str, Any]]) -> List[BaseMessage]:
