@@ -24,7 +24,7 @@ class CodeExecutionService:
             results[filepath] = metadata
         return results
     
-    async def run_analysis_agent(self, analysis_plan: list[str], task_type: str, file_paths: list[str], metadata: dict = None, target_column: str | None = None, risk_checks: list[str] | None = None) -> dict:
+    async def run_analysis_agent(self, analysis_plan: list[str], task_type: str, file_paths: list[str], session_id: str, metadata: dict = None, target_column: str | None = None, risk_checks: list[str] | None = None) -> dict:
         """
         Executes the Data Analysis Agent (LangGraph).
         This essentially wraps the complex planning/coding/execution loop into a single function call.
@@ -34,8 +34,9 @@ class CodeExecutionService:
         # 1. Prepare Initial State
         initial_state: AnalysisState = {
             "file_paths": file_paths,
+            "session_id": session_id,
             "user_query": f"Task Type: {task_type}. Plan: {analysis_plan}", # Context for the agent
-            "metadata": metadata or {}, # Pass existing metadata if available
+            "metadata": metadata or {},         # Will be filled by analyze_metadata_node
             "analysis_plan": analysis_plan,
             "generated_code": "",
             "execution_result": None,

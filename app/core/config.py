@@ -76,7 +76,6 @@ class Config:
 
         # Conversation settings
         MAX_CONVERSATION_TURNS = admin.max_conversation_turns
-        
         HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", 30.0))  # seconds
         WEB_SEARCH_NUM_RESULTS = int(os.getenv("WEB_SEARCH_NUM_RESULTS", 5))
         EMBEDDING_DIM = 1024  # Dimension for BGE-2.0 models

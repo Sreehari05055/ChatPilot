@@ -19,3 +19,4 @@ langchain-openai
 langchain-anthropic
 langgraph
 slowapi
+docker

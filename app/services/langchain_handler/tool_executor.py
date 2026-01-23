@@ -115,13 +115,14 @@ class ToolExecutor:
         file_context = ctx["file_context"]
         file_paths = file_context.get("file_paths", [])
         metadata = file_context.get("file_metadata", {})
-        
+        session_id = ctx["session_id"]
         # Trigger the full LangGraph analysis agent
         result = await self.code_executor.run_analysis_agent(
             args["analysis_plan"],
             args["task_type"],
             file_paths,
-            metadata,
+            session_id,
+            metadata, 
             args.get("target_column"),
             args.get("risk_checks", [])
         )
@@ -148,6 +149,6 @@ class ToolExecutor:
 
     async def _execute_code(self, args, ctx):
         """Direct code execution using the graph node."""
-        temp_state = {"generated_code": args.get("code", "")}
+        temp_state = {"generated_code": args.get("code", ""), "session_id": ctx["session_id"], "file_paths": ctx["file_context"].get("file_paths", [])}
         result_state = await self.code_executor.analysis_graph.execute_code_node(temp_state)
         return json.dumps(result_state.get("execution_result", {}), indent=2)

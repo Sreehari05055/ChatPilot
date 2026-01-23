@@ -16,6 +16,7 @@ class AnalysisState(TypedDict):
     """
     file_paths: List[str]            # Input: List of files to analyze
     user_query: str                  # Input: The user's question/request
+    session_id: str                  # Input: Unique identifier for the user session
     
     metadata: dict                   # Artifact from Metadata Step
     analysis_plan: List[str]         # Plan generated (optional, or implicit in code gen)
@@ -119,7 +120,7 @@ class DataAnalysisGraph:
         cleaned_code = BaseFileHandler.clean_code_block(code)
         
         # Execute
-        result = self.code_executor.execute_code(cleaned_code)
+        result = self.code_executor.execute_code(cleaned_code, session_id=state.get("session_id"),file_paths=state.get("file_paths", []))
         
         if result['success']:
             logger.info("--- Execution Success ---")
