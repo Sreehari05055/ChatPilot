@@ -62,7 +62,6 @@ def init_chatbot_routes(app, system_prompt, history_store, http_client):
                 # Save files to session's upload directory
                 if files:
                     saved_paths = await history_store.save_uploaded_files(session_id, files)
-                    await history_store.save_session_metadata(session_id, file_paths=saved_paths)
             else:
                 body = await request.json()
                 question = body.get('question')

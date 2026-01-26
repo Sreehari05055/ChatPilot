@@ -90,9 +90,9 @@ class Config:
         
         # Sandbox / Docker execution settings (user-configurable via env)
         SANDBOX_NANO_CPUS = int(os.getenv("SANDBOX_NANO_CPUS", "500000000"))  # 0.5 CPU
-        SANDBOX_MEM_LIMIT = os.getenv("SANDBOX_MEM_LIMIT", "512m")
-        SANDBOX_MEM_RESERVATION = os.getenv("SANDBOX_MEM_RESERVATION", "256m")
-        SANDBOX_MEMSWAP_LIMIT = os.getenv("SANDBOX_MEMSWAP_LIMIT", "512m")
+        SANDBOX_MEM_LIMIT = os.getenv("SANDBOX_MEM_LIMIT", "2g")
+        SANDBOX_MEM_RESERVATION = os.getenv("SANDBOX_MEM_RESERVATION", "1g")
+        SANDBOX_MEMSWAP_LIMIT = os.getenv("SANDBOX_MEMSWAP_LIMIT", "2g")
         SANDBOX_PIDS_LIMIT = int(os.getenv("SANDBOX_PIDS_LIMIT", "64"))
         SANDBOX_SHM_SIZE = os.getenv("SANDBOX_SHM_SIZE", "64m")
         SANDBOX_AUTO_REMOVE = os.getenv("SANDBOX_AUTO_REMOVE", "False").lower() in ("1", "true", "yes")
