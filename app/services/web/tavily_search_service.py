@@ -89,6 +89,9 @@ class TavilyWebSearchService(BaseWebSearchService):
                 if status == "completed":
                     content = response.get("content", "")
                     sources = response.get("sources", [])
+
+                    logger.info(f"Tavily research completed: {content}")
+                    logger.info(f"Tavily research sources: {sources}")
                     
                     if not content:
                         return "Research completed but returned no content."
