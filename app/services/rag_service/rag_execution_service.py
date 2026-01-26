@@ -7,6 +7,11 @@ class RAGExecutionService:
         self.rag_pipeline = RAGPipeline()
 
     async def init_index(self):
+        """Initial load of the index (used on app startup)."""
+        await self.rag_pipeline._load_index()
+
+    async def rebuild_index(self):
+        """Full wipe and rebuild of the index (used by Ingest API)."""
         await self.rag_pipeline._build_index()
 
     async def get_info(self, queries: list[str]):

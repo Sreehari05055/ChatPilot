@@ -68,66 +68,78 @@ class RAGPipeline:
             logger.error(f"Error retrieving corpus data: {e}", exc_info=True)
             raise
 
-    async def _build_index(self):
+    async def _load_index(self):
+        """Load the existing index from disk without rebuilding."""
         try:
-
-            semantic_splitter = SemanticDoubleMergingSplitterNodeParser.from_defaults(
-                initial_threshold=0.5,
-                appending_threshold=0.8,
-                merging_threshold=0.7,
-                max_chunk_size=config.CHUNK_SIZE
-            )
             chroma_client = chromadb.PersistentClient(path=config.INDEX_DIR)
             chroma_collection = chroma_client.get_or_create_collection(config.COLLECTION_NAME)
-            vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
             
+            if chroma_collection.count() == 0:
+                logger.warning("No existing index found on disk. RAG will not work until files are ingested.")
+                RAGPipeline.index = None
+                return
+
+            vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+            RAGPipeline.index = VectorStoreIndex.from_vector_store(
+                vector_store, embed_model=self.embed_model
+            )
+            logger.info(f"Successfully loaded RAG index with {chroma_collection.count()} vectors.")
+        except Exception as e:
+            logger.error(f"Failed to load existing RAG index: {e}")
+            RAGPipeline.index = None
+
+    async def _build_index(self):
+        """Wipe and recreate the RAG index from source_files/."""
+        try:
+            logger.info("Starting full RAG index rebuild...")
+            
+            # 1. Clear existing storage
+            chroma_client = chromadb.PersistentClient(path=config.INDEX_DIR)
+            try:
+                chroma_client.delete_collection(config.COLLECTION_NAME)
+            except:
+                logger.warning("Failed to delete existing collection. Proceeding with rebuild.")
+            
+            chroma_collection = chroma_client.get_or_create_collection(config.COLLECTION_NAME)
+            vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+            # 2. Parse all files from DATA_DIR
             def get_docs_sync():
-                    return list(FileDataProvider(config.DATA_DIR).fetch_documents())
+                return list(FileDataProvider(config.DATA_DIR).fetch_documents())
 
             raw_documents = await asyncio.to_thread(get_docs_sync)
             documents: List[Document] = []
+            
             for data in raw_documents:
-                content = data.get("content", "")
-                title = data.get("title", "")
-                doc_id = data.get("id", None)
-
                 doc = Document(
-                    text=content, 
-                    id_=doc_id, 
+                    text=data.get("content", ""), 
+                    id_=data.get("id"), 
                     metadata={
-                        "title": title, 
-                        "doc_id": doc_id.split("_chunk")[0]
-                    },
-                    text_template="SOURCE: {metadata_str}\n---\nCONTENT: {content}",
-                    metadata_template="{key}: {value}",
-                    metadata_seperator=" | "
+                        "title": data.get("title", ""), 
+                        "doc_id": data.get("id", "").split("_chunk")[0]
+                    }
                 )
-                doc.excluded_embed_metadata_keys = ["title", "doc_id"]
-
                 documents.append(doc)
 
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
-            
-            if chroma_collection.count() > 0:
-                logger.info("Existing index found. Loading from persistent storage.")
-                RAGPipeline.index = VectorStoreIndex.from_vector_store(
-                    vector_store, embed_model=self.embed_model
-                )
-                refreshed_ids = RAGPipeline.index.refresh_ref_docs(documents)
-                if any(refreshed_ids):
-                    logger.info(f"Updated index with changed pages: {refreshed_ids}")
-                else:
-                    logger.info("No changes detected in files. Index is up to date.")
-            else:
-                RAGPipeline.index = VectorStoreIndex(
-                    documents,
-                    storage_context=storage_context,
-                    embed_model=self.embed_model,
-                    transformations=[semantic_splitter]
-                )
-                logger.info("Created new RAG index from documents.")
+            if not documents:
+                logger.warning("No documents found in source_files/. Index will be empty.")
+                RAGPipeline.index = None
+                return
 
-            logger.info("RAG index built and persisted successfully.")
+            # 3. Create fresh index
+            semantic_splitter = SemanticDoubleMergingSplitterNodeParser.from_defaults(
+                max_chunk_size=config.CHUNK_SIZE
+            )
+            
+            RAGPipeline.index = VectorStoreIndex(
+                documents,
+                storage_context=storage_context,
+                embed_model=self.embed_model,
+                transformations=[semantic_splitter]
+            )
+
+            logger.info(f"RAG index rebuilt successfully with {len(documents)} documents.")
         except Exception as e:
-            logger.error(f"Error building RAG index: {e}", exc_info=True)
-            self.index = None
+            logger.error(f"Error during RAG index rebuild: {e}", exc_info=True)
+            RAGPipeline.index = None
