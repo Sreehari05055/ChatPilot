@@ -4,6 +4,7 @@ import os
 import json
 from dataclasses import dataclass, field
 from app.prompts.prompts import ToneStyle, get_system_prompt
+from app.core.hardware import HardwareDetector
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
@@ -45,7 +46,7 @@ admin = AdminConfig(
     rag=RAGConfig(
         chunk_size=512,
         chunk_overlap=50,
-        top_k=20
+        top_k=5
     ),
     max_conversation_turns=10
 )
@@ -82,6 +83,19 @@ class Config:
         EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"
         COLLECTION_NAME = "chat_collection"
         EXEC_MAX_RETRIES = int(os.getenv("EXEC_MAX_RETRIES", 3))
+
+        # Hardware Acceleration Settings
+        USE_GPU_ACCELERATION, HARDWARE_MODE = HardwareDetector.should_use_acceleration()
+        CPU_COUNT = os.cpu_count() or 4
+        
+        # Sandbox / Docker execution settings (user-configurable via env)
+        SANDBOX_NANO_CPUS = int(os.getenv("SANDBOX_NANO_CPUS", "500000000"))  # 0.5 CPU
+        SANDBOX_MEM_LIMIT = os.getenv("SANDBOX_MEM_LIMIT", "512m")
+        SANDBOX_MEM_RESERVATION = os.getenv("SANDBOX_MEM_RESERVATION", "256m")
+        SANDBOX_MEMSWAP_LIMIT = os.getenv("SANDBOX_MEMSWAP_LIMIT", "512m")
+        SANDBOX_PIDS_LIMIT = int(os.getenv("SANDBOX_PIDS_LIMIT", "64"))
+        SANDBOX_SHM_SIZE = os.getenv("SANDBOX_SHM_SIZE", "64m")
+        SANDBOX_AUTO_REMOVE = os.getenv("SANDBOX_AUTO_REMOVE", "False").lower() in ("1", "true", "yes")
 
     except Exception as e:
         logger.error(f"Error in configuration: {e}")
