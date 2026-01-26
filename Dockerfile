@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir \
     seaborn \
     scipy \
     scikit-learn \
+    statsmodels \
     openpyxl
 
 # Set working directory
