@@ -18,7 +18,7 @@ class WebResearch(BaseModel):
     topic: str = Field(description="The complex topic or question that requires a multi-step research report.")
 
 class AnalyzeData(BaseModel):
-    """REQUIRED for ANY questions about uploaded CSV/Excel files. Use this to perform data analysis, statistics, visualizations, filtering, aggregations, or machine learning on uploaded data. Check the UPLOADED FILE METADATA in the system message."""
+    """REQUIRED for ANY questions about uploaded CSV/Excel files. Use this to perform data analysis, statistics, visualizations, filtering, aggregations, or machine learning on uploaded data. If you don't know which files are available, call ListFiles first."""
     analysis_plan: List[str] = Field(description="Ordered, concrete analysis steps to perform. Each step must be specific and actionable.")
     task_type: Literal[
         "eda",
@@ -32,6 +32,10 @@ class AnalyzeData(BaseModel):
     ] = Field(description="The type of analysis task to perform.")
     target_column: Optional[str] = Field(None, description="Target variable for ML tasks, null otherwise.")
     risk_checks: Optional[List[str]] = Field(default=[], description="Specific risk or bias checks to perform on the data or model.")
+
+class ListFiles(BaseModel):
+    """List all files that the user has uploaded to this session. Use this if the user asks 'what files did I upload?' or if you need to find a filename to analyze."""
+    pass
 
 class GetInfo(BaseModel):
     """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough."""
@@ -58,6 +62,7 @@ def get_tool_schemas():
         AnalyzeData,
         GetInfo,
         ExtractMetadata,
+        ListFiles,
         GenerateCode,
         ExecuteCode
     ]

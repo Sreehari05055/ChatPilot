@@ -24,19 +24,27 @@ class CodeExecutionService:
             results[filepath] = metadata
         return results
     
-    async def run_analysis_agent(self, analysis_plan: list[str], task_type: str, file_paths: list[str], session_id: str, metadata: dict = None, target_column: str | None = None, risk_checks: list[str] | None = None) -> dict:
+    async def run_analysis_agent(self, analysis_plan: list[str], task_type: str, session_id: str, store: any, target_column: str | None = None, risk_checks: list[str] | None = None) -> dict:
         """
         Executes the Data Analysis Agent (LangGraph).
-        This essentially wraps the complex planning/coding/execution loop into a single function call.
+        Resolves its own files and metadata from the session store.
         """
-        logger.info(f"🚀 Starting Data Analysis Agent for files: {file_paths}")
+        # Resolve Context
+        file_context = await store.get_session_metadata(session_id)
+        upload_dir = store.get_session_upload_dir(session_id)
+        
+        file_names = file_context.get("file_paths", [])
+        actual_paths = [os.path.join(upload_dir, f) for f in file_names]
+        metadata = file_context.get("file_metadata", {})
+
+        logger.info(f"🚀 Starting Data Analysis Agent for session: {session_id}")
         
         # 1. Prepare Initial State
         initial_state: AnalysisState = {
-            "file_paths": file_paths,
+            "file_paths": actual_paths,
             "session_id": session_id,
-            "user_query": f"Task Type: {task_type}. Plan: {analysis_plan}", # Context for the agent
-            "metadata": metadata or {},         # Will be filled by analyze_metadata_node
+            "user_query": f"Task Type: {task_type}. Plan: {analysis_plan}",
+            "metadata": metadata,
             "analysis_plan": analysis_plan,
             "generated_code": "",
             "execution_result": None,

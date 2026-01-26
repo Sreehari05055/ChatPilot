@@ -42,7 +42,7 @@ if not os.path.exists(Config.INDEX_DIR):
 
 def create_app() -> FastAPI:
 
-    history_store = FileHistoryStore(storage_dir="conversations")
+    history_store = FileHistoryStore(storage_dir="conversations", rag_dir=Config.DATA_DIR)
 
     if not Config.LLM_API_KEY:  
         logger.error("LLM_API_KEY environment variable is not set")
@@ -66,7 +66,10 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowAPIMiddleware)
 
     from app.routes.chatbot_routes import init_chatbot_routes
+    from app.routes.ingest_routes import init_ingest_routes
+    init_ingest_routes(app, history_store)
     init_chatbot_routes(app, Config.system_prompt, history_store, http_client)
+
 
     return app
 

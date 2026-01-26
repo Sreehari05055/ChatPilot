@@ -21,6 +21,25 @@ class CodeSandboxExecutor:
         self.client = None
         self.containers = {}
         self._lock = threading.Lock()
+        # Load sandbox limits from config (allow runtime changes via env)
+        try:
+            self.sandbox_nano_cpus = getattr(Config, 'SANDBOX_NANO_CPUS', 500000000)
+            self.sandbox_mem_limit = getattr(Config, 'SANDBOX_MEM_LIMIT', '512m')
+            self.sandbox_mem_reservation = getattr(Config, 'SANDBOX_MEM_RESERVATION', '256m')
+            self.sandbox_memswap_limit = getattr(Config, 'SANDBOX_MEMSWAP_LIMIT', self.sandbox_mem_limit)
+            self.sandbox_pids_limit = getattr(Config, 'SANDBOX_PIDS_LIMIT', 64)
+            self.sandbox_shm_size = getattr(Config, 'SANDBOX_SHM_SIZE', '64m')
+            self.sandbox_auto_remove = getattr(Config, 'SANDBOX_AUTO_REMOVE', False)
+        except Exception:
+            # Fallbacks in case Config is missing attributes
+            self.sandbox_nano_cpus = 500000000
+            self.sandbox_mem_limit = '512m'
+            self.sandbox_mem_reservation = '256m'
+            self.sandbox_memswap_limit = '512m'
+            self.sandbox_pids_limit = 64
+            self.sandbox_shm_size = '64m'
+            self.sandbox_auto_remove = False
+
         self._initialize()
     
     def _initialize(self):
@@ -57,7 +76,15 @@ class CodeSandboxExecutor:
     def _create_container(self, container_name: str):
         """Create a new sandbox container."""
         try:
-            # Note: The image 'python-sandbox:latest' should be built from sandbox.Dockerfile
+            # Enable read-only access to the data directory for large file analysis
+            host_data_path = os.path.abspath(Config.DATA_DIR)
+            volumes = {
+                host_data_path: {
+                    'bind': '/home/sandboxuser/data',
+                    'mode': 'ro'
+                }
+            }
+
             container = self.client.containers.run(
                 image=self.image_name,
                 name=container_name,
@@ -65,10 +92,15 @@ class CodeSandboxExecutor:
                 command="sleep infinity",
                 user="sandboxuser",
                 network_mode="none",
-                mem_limit="512m",
-                cpu_quota=50000,
-                cpu_period=100000,
-                auto_remove=False,
+                volumes=volumes,
+                # Apply configurable resource limits
+                mem_limit=self.sandbox_mem_limit,
+                mem_reservation=self.sandbox_mem_reservation,
+                memswap_limit=self.sandbox_memswap_limit,
+                nano_cpus=self.sandbox_nano_cpus,
+                pids_limit=self.sandbox_pids_limit,
+                shm_size=self.sandbox_shm_size,
+                auto_remove=self.sandbox_auto_remove,
             )
             time.sleep(1) # Wait for startup
             return container
@@ -108,25 +140,41 @@ class CodeSandboxExecutor:
         
         container = self._ensure_container(session_id)
         
-        # 1. Clean workspace and copy new files
-        # (Simplified: just copy files. In full prod, we'd use session-specific paths)
-        try:
-            if file_paths:
-                self._copy_files_to_container(container, file_paths)
-                
-                # Heuristic: Replace local absolute paths with container-relative filenames
-                for path in file_paths:
-                    filename = os.path.basename(path)
-                    # 1. Replace exact path
-                    code = code.replace(path, filename)
-                    # 2. Replace double-escaped path (common in LLM python strings)
-                    escaped_path = path.replace('\\', '\\\\')
-                    code = code.replace(escaped_path, filename)
-                    # 3. Replace forward-slash version (common LLM behavior)
-                    unix_path = path.replace('\\', '/')
-                    code = code.replace(unix_path, filename)
+        # 1. Identify which files need to be copied (Session uploads) vs just referenced (Global data)
+        abs_data_dir = os.path.abspath(Config.DATA_DIR).lower()
+        files_to_copy = []
+        
+        if file_paths:
+            for path in file_paths:
+                abs_path = os.path.abspath(path)
+                # If it's NOT in the mounted DATA_DIR, we must copy it manually
+                if not abs_path.lower().startswith(abs_data_dir):
+                    files_to_copy.append(abs_path)
+            
+            if files_to_copy:
+                self._copy_files_to_container(container, files_to_copy)
 
-            # 2. Run code
+        # 2. Path Translation Magic:
+        # We replace absolute host paths in the agent's code with container paths.
+        if file_paths:
+            for path in file_paths:
+                filename = os.path.basename(path)
+                abs_path = os.path.abspath(path)
+                
+                # Case A: Global file in 'source_files/' -> 'data/filename'
+                if abs_path.lower().startswith(abs_data_dir):
+                    target_path = f"data/{filename}"
+                # Case B: Session file in 'uploads/' -> 'filename'
+                else:
+                    target_path = filename
+                
+                # Replace exact and escaped variations of the path
+                code = code.replace(path, target_path)
+                code = code.replace(path.replace('\\', '\\\\'), target_path)
+                code = code.replace(path.replace('\\', '/'), target_path)
+
+        try:
+            # 3. Run code
             exec_result = container.exec_run(
                 cmd=['python', '-c', code],
                 demux=True,
@@ -143,7 +191,14 @@ class CodeSandboxExecutor:
                 return {'success': True, 'result': result, 'error': None, 'returncode': 0}
             
             error_obj = self.error_classifier.classify_error(stderr, returncode)
-            return {"success": False, "result": None, "error": error_obj, "returncode": returncode}
+            error_msg = error_obj.get("message") or "Unknown execution error"
+            return {
+                "success": False, 
+                "result": None, 
+                "error": error_msg, 
+                "error_details": error_obj, 
+                "returncode": returncode
+            }
 
         except Exception as e:
             logger.error(f"Docker execution failed: {e}")

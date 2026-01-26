@@ -1,6 +1,7 @@
 from app import logger
 import json
 from app.services.code_execution.base_handler_factory import BaseFileHandler
+import os
 
 class ToolExecutor:
     def __init__(self, http_client=None):
@@ -12,7 +13,7 @@ class ToolExecutor:
         self.code_executor = CodeExecutionService()
         self.rag_service = RAGExecutionService()
 
-    async def execute(self, function_name, args_str, file_context=None, session_id=None, store=None):
+    async def execute(self, function_name, args_str, session_id=None, store=None):
         """Dynamic tool dispatcher."""
         try:
             dispatch_map = {
@@ -22,6 +23,7 @@ class ToolExecutor:
                 "AnalyzeData": self._execute_analyze_data,
                 "GetInfo": self._execute_get_info,
                 "ExtractMetadata": self._execute_extract_metadata,
+                "ListFiles": self._execute_list_files, 
                 "GenerateCode": self._execute_generate_code,
                 "ExecuteCode": self._execute_code,
                 # snake_case mapping
@@ -31,15 +33,15 @@ class ToolExecutor:
                 "analyze_data": self._execute_analyze_data,
                 "get_info": self._execute_get_info,
                 "extract_metadata": self._execute_extract_metadata,
+                "list_files": self._execute_list_files,
                 "generate_code": self._execute_generate_code,
                 "execute_code": self._execute_code,
             }
 
             args = json.loads(args_str) if args_str.strip() else {}
             
-            # Encapsulate context for the wrappers
+            # Context for the wrappers
             ctx = {
-                "file_context": file_context or {},
                 "session_id": session_id,
                 "store": store
             }
@@ -65,7 +67,9 @@ class ToolExecutor:
         return await self.web_search_service.web_fetch(args.get("url", ""))
 
     async def _execute_web_research(self, args, ctx):
-        return await self.web_search_service.web_research(args.get("topic"))
+        research_results = await self.web_search_service.web_research(args.get("topic"))
+        logger.info(f"Web research results received")
+        return research_results
 
     async def _execute_get_info(self, args, ctx):
         return await self.rag_service.get_info(args.get("topic"))
@@ -73,58 +77,51 @@ class ToolExecutor:
     async def _execute_extract_metadata(self, args, ctx):
         """
         Targeted metadata extraction. 
-        Resolves filenames to full paths and analyzes ONLY what is requested.
-        Saves resulting metadata back to the session store.
+        Fetches fresh metadata from store and analyzes only requested files.
         """
-        requested_files = args.get("file_paths", []) # LLM might pass ['data.csv']
-        file_context = ctx["file_context"]
+        requested_files = args.get("file_paths", [])
         session_id = ctx["session_id"]
         store = ctx["store"]
 
-        all_paths = file_context.get("file_paths", [])
+        # Fetch fresh context inside the tool
+        file_context = await store.get_session_metadata(session_id)
+        upload_dir = store.get_session_upload_dir(session_id)
         existing_metadata = file_context.get("file_metadata", {})
 
         actual_paths = []
         for req_f in requested_files:
-            found = False
-            for path in all_paths:
-                # Matches if the filename is in the path OR if it matches exactly
-                if req_f in path or req_f == path:
-                    actual_paths.append(path)
-                    found = True
-                    break
-            if not found:
-                return f"Error: File '{req_f}' not found in available session files."
+            clean_name = os.path.basename(req_f)
+            path = os.path.join(upload_dir, clean_name)
+            
+            if os.path.exists(path):
+                actual_paths.append(path)
+            else:
+                return f"Error: File '{clean_name}' not found."
 
-        # Analyze the requested files
+        # Analyze
         new_metadata = await self.code_executor.analyze_files(actual_paths)
         
-        # Merge with existing metadata
+        # Merge & Persist
         updated_metadata = {**existing_metadata, **new_metadata}
-        
-        # PERSIST: Save back to the session history so it's available in future turns
         if session_id and store:
             logger.info(f"💾 Persisting JIT metadata for session {session_id}")
             await store.save_session_metadata(session_id, file_metadata=updated_metadata)
-            # Update the local context so it's available immediately for tools in THIS turn
-            file_context["file_metadata"] = updated_metadata
 
-        return json.dumps(new_metadata, indent=2)
+        clean_results = {os.path.basename(k): v for k, v in new_metadata.items()}
+        return json.dumps(clean_results, indent=2)
 
     async def _execute_analyze_data(self, args, ctx):
-        file_context = ctx["file_context"]
-        file_paths = file_context.get("file_paths", [])
-        metadata = file_context.get("file_metadata", {})
-        session_id = ctx["session_id"]
-        # Trigger the full LangGraph analysis agent
+        """
+        Trigger the full Data Analysis Agent.
+        The service itself will handle path resolution and metadata fetching.
+        """
         result = await self.code_executor.run_analysis_agent(
-            args["analysis_plan"],
-            args["task_type"],
-            file_paths,
-            session_id,
-            metadata, 
-            args.get("target_column"),
-            args.get("risk_checks", [])
+            analysis_plan=args["analysis_plan"],
+            task_type=args["task_type"],
+            session_id=ctx["session_id"],
+            store=ctx["store"],
+            target_column=args.get("target_column"),
+            risk_checks=args.get("risk_checks", [])
         )
         
         if result.get("success"):
@@ -137,8 +134,20 @@ class ToolExecutor:
         else:
             return f"ERROR: {result.get('error', {}).get('message', 'Unknown error')}"
 
+    async def _execute_list_files(self, args, ctx):
+        """List all files available in the current session."""
+        session_id = ctx["session_id"]
+        store = ctx["store"]
+        metadata = await store.get_session_metadata(session_id)
+        files = metadata.get("file_paths", [])
+        
+        if not files:
+            return "No files have been uploaded to this session yet."
+        
+        return f"The following files are available in this session: {', '.join(files)}"
+
     async def _execute_generate_code(self, args, ctx):
-        """Direct code generation using the graph node."""
+        """Direct code generation."""
         temp_state = {
             "metadata": args.get("metadata", {}),
             "user_query": args.get("query", ""),
@@ -148,7 +157,20 @@ class ToolExecutor:
         return result_state.get("generated_code", "")
 
     async def _execute_code(self, args, ctx):
-        """Direct code execution using the graph node."""
-        temp_state = {"generated_code": args.get("code", ""), "session_id": ctx["session_id"], "file_paths": ctx["file_context"].get("file_paths", [])}
+        """Direct code execution."""
+        session_id = ctx["session_id"]
+        store = ctx["store"]
+        
+        # Fresh resolution inside the service call
+        file_context = await store.get_session_metadata(session_id)
+        upload_dir = store.get_session_upload_dir(session_id)
+        file_names = file_context.get("file_paths", [])
+        actual_paths = [os.path.join(upload_dir, f) for f in file_names]
+
+        temp_state = {
+            "generated_code": args.get("code", ""), 
+            "session_id": session_id, 
+            "file_paths": actual_paths
+        }
         result_state = await self.code_executor.analysis_graph.execute_code_node(temp_state)
         return json.dumps(result_state.get("execution_result", {}), indent=2)

@@ -1,3 +1,4 @@
+import os
 from typing import TypedDict, Annotated, List, Union
 from langgraph.graph import StateGraph, END
 from app.core.config import Config
@@ -80,7 +81,10 @@ class DataAnalysisGraph:
             # Reusing existing FileHandlerFactory logic
             handler = FileHandlerFactory.get_handler(filepath)
             metadata = handler.analyze_file(filepath)
-            results[filepath] = metadata
+            
+            # Use basename as key so the LLM writes clean code (e.g. pd.read_csv('data.csv'))
+            filename = os.path.basename(filepath)
+            results[filename] = metadata
         
         return {"metadata": results, "attempts": 0}
 
@@ -104,7 +108,7 @@ class DataAnalysisGraph:
             previous_code=previous_code if previous_error else None,
             previous_error=previous_error
         )
-        
+        logger.info(f"--- Generated Code ---\n{code}\n--- End of Code ---")
         return {
             "generated_code": code, 
             "attempts": state.get("attempts", 0) + 1,
@@ -143,7 +147,8 @@ class DataAnalysisGraph:
             return "end" # Give up
             
         execution_result = state.get("execution_result", {})
-        if execution_result.get("error", {}).get("category") == "NON_RETRYABLE":
+        error_details = execution_result.get("error_details", {})
+        if error_details.get("category") == "NON_RETRYABLE":
              return "end"
 
         return "retry"
