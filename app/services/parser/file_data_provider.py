@@ -18,23 +18,21 @@ class FileDataProvider(BaseDataProvider):
                 parser = ParserFactory.get_parser(filepath)
                 result = parser.extract(filepath)
 
-                if isinstance(result, list):  # chunked (HTML)
-                    for i, chunk in enumerate(result):
-                        if not chunk or not chunk.strip():
-                            continue
-                        yield {
-                            "id": f"{doc_id}_chunk{i+1}",
-                            "title": f"{title} (Section {i+1})",
-                            "content": chunk,
-                        }
-                else:
-                    if not result or not result.strip():
-                        continue
-                    yield {
-                        "id": doc_id,
-                        "title": title,
-                        "content": result,
-                    }
+                if not result or not isinstance(result, dict):
+                    continue
+                
+                content = result.get("content", "")
+                metadata = result.get("metadata", {})
+                
+                if not content or not content.strip():
+                    continue
+                
+                yield {
+                    "id": doc_id,
+                    "title": metadata.get("title", title),
+                    "content": content,
+                    "metadata": metadata
+                }
 
             except ValueError:
                 continue  

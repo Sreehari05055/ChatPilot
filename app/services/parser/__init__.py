@@ -5,5 +5,6 @@ from app.services.parser.markdown_parser import MarkdownExtractor
 from app.services.parser.file_data_provider import FileDataProvider
 from app.services.parser.base_data_provider import BaseDataProvider
 from app.services.parser.parser_factory import ParserFactory
+from app.services.parser.image_parser import ImageExtractor
 
-__all__ = ["PDFExtractor", "DocxExtractor", "TextExtractor", "MarkdownExtractor", "FileDataProvider", "BaseDataProvider", "ParserFactory"]
+__all__ = ["PDFExtractor", "DocxExtractor", "TextExtractor", "MarkdownExtractor", "FileDataProvider", "BaseDataProvider", "ParserFactory", "ImageExtractor"]

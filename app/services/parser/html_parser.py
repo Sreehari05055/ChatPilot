@@ -1,52 +1,61 @@
-from lxml import etree, html
-from sklearn import tree
+import os
+from docling.document_converter import DocumentConverter, HTMLFormatOption
+from docling.datamodel.base_models import InputFormat
 from app.services.parser.base_parser import BaseParser
+from app.core.hardware import HardwareDetector
 from app import logger
-
 
 class HTMLParser(BaseParser):
     """
-    Extracts text content from HTML files.
-    Usage:
-        content = HTMLParser().extract(filepath)
+    Extracts structured text content from HTML files using Docling with hardware acceleration.
     """
+    def __init__(self):
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        
+        # 1. Define HTML-specific logic (No OCR needed for native text)
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True
+        
+        # 2. Inject global hardware acceleration
+        hw_config = HardwareDetector.get_runtime_config()
+        pipeline_options.accelerator_options = hw_config["accelerator_options"]
+        
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.HTML: HTMLFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+
     def get_file_extensions(self):
-        return ['.html']
+        return ['.html', '.htm']
     
     def extract(self, filepath):
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                tree = html.fromstring(f.read())
-
-            chunks = []
-
-            # Iterate over headings to create logical chunks
-            for heading in tree.xpath('//h1|//h2|//h3'):
-                title = heading.text_content().strip()
-                content = []
-
-                # Include siblings until the next heading
-                for sibling in heading.itersiblings():
-                    if sibling.tag in ['h1', 'h2', 'h3']:
-                        break
-                    if sibling.tag == 'p':
-                        content.append(sibling.text_content().strip())
-                    elif sibling.tag == 'ul':
-                        for li in sibling.xpath('.//li'):
-                            content.append("- " + li.text_content().strip())
-                    elif sibling.tag == 'ol':
-                        for idx, li in enumerate(sibling.xpath('.//li'), start=1):
-                            content.append(f"{idx}. {li.text_content().strip()}")
-                    elif sibling.tag == 'table':
-                        for row in sibling.xpath('.//tr'):
-                            cells = [c.text_content().strip() for c in row.xpath('.//th|.//td')]
-                            content.append(" | ".join(cells))
-
-                chunk_text = title + "\n" + "\n".join(content)
-                cleaned_chunk = self.clean_for_embeddings(chunk_text)
-                chunks.append(cleaned_chunk)
-
-            return chunks
+            logger.info(f"Extracting HTML with Docling: {filepath}")
+            result = self.converter.convert(filepath)
+            
+            # Export to markdown
+            md_text = result.document.export_to_markdown()
+            
+            if not md_text or not md_text.strip():
+                logger.warning(f"Docling extracted empty content from {filepath}")
+                return None
+            
+            # Extract metadata
+            metadata = {
+                "title": result.document.name or os.path.basename(filepath),
+                "file_type": "html",
+                "source": filepath
+            }
+            
+            # Clean content while preserving structural markdown
+            cleaned_content = self.clean_for_embeddings(md_text)
+            
+            return {
+                "content": cleaned_content,
+                "metadata": metadata
+            }
+            
         except Exception as e:
-            logger.exception(f"HTML extraction failed for %s: %s", filepath, e)
-            return []
+            logger.error(f"Docling HTML extraction failed for {filepath}: {e}", exc_info=True)
+            return None

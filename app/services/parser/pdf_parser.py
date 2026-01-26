@@ -1,84 +1,74 @@
-import pymupdf4llm
-import pymupdf.layout
+import os
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
 from app.services.parser.base_parser import BaseParser
+from app.core.hardware import HardwareDetector
 from app import logger
 
 class PDFExtractor(BaseParser):
     """
-    Extracts text content from PDF files.
-    Usage:
-        content = PDFExtractor().extract(filepath)
+    Extracts text content from PDF files using Docling for high-fidelity layout preservation.
     """
+    def __init__(self):
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        
+        # 1. Define PDF-specific logic (Layout + OCR + Tables)
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True
+        pipeline_options.do_table_structure = True
+        
+        # 2. Inject global hardware acceleration
+        hw_config = HardwareDetector.get_runtime_config()
+        pipeline_options.accelerator_options = hw_config["accelerator_options"]
+        
+        # Apply batch sizes if high-performance mode is active
+        for key, value in hw_config["batch_sizes"].items():
+            setattr(pipeline_options, key, value)
+        
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+
     def get_file_extensions(self):
         return ['.pdf']
     
     def extract(self, filepath):
         try:
-            # Disable table detection to avoid the bug
-            md_text = pymupdf4llm.to_markdown(
-                filepath,
-                write_images=False,
-                table_strategy="none"  # ← Disable table detection
-            )
+            logger.info(f"Extracting PDF with Docling (+Metadata): {filepath}")
+            result = self.converter.convert(filepath)
+            
+            # Export to markdown
+            md_text = result.document.export_to_markdown()
             
             if not md_text or not md_text.strip():
-                logger.warning(f"PDF {filepath} extracted empty content")
-                return ""
+                logger.warning(f"Docling extracted empty content from {filepath}")
+                return None
             
-            cleaned_md_text = self.clean_markdown(md_text)
-            cleaned_text_for_embeddings = self.clean_for_embeddings(cleaned_md_text)
-            return cleaned_text_for_embeddings
+            # Extract document-level metadata
+            # Docling handles many formats; for PDFs, we look at the 'origin' and 'name'
+            metadata = {
+                "title": result.document.name or os.path.basename(filepath),
+                "page_count": len(result.document.pages) if hasattr(result.document, "pages") else 0,
+                "file_type": "pdf",
+                "source": filepath
+            }
             
-        except Exception as e:
-            logger.error(f"Error extracting PDF {filepath}: {e}", exc_info=True)
-        # Fallback to basic PyMuPDF extraction (always works)
-        try:
-            logger.info(f"Using fallback: basic PyMuPDF extraction...")
-            doc = pymupdf.open(filepath)
+            # If docling captured specific origin info, we can add it
+            if result.document.origin:
+                # 'mimetype' helps identify if it was actually a scan or a digital PDF
+                metadata["mimetype"] = result.document.origin.mimetype
             
-            if len(doc) == 0:
-                logger.warning(f"PDF has no pages: {filepath}")
-                doc.close()
-                return ""
+            # Clean but keep structure
+            cleaned_content = self.clean_for_embeddings(md_text)
             
-            logger.info(f"PDF has {len(doc)} pages")
-            
-            # Extract text from all pages
-            all_text = []
-            for page_num in range(len(doc)):
-                try:
-                    page = doc[page_num]
-                    text = page.get_text("text")  # Simple text extraction
-                    
-                    if text.strip():
-                        # Add page marker for better context
-                        all_text.append(f"[Page {page_num + 1}]\n{text}")
-                    else:
-                        logger.debug(f"Page {page_num + 1} has no text")
-                        
-                except Exception as e:
-                    logger.warning(f"Error extracting page {page_num + 1}: {e}")
-                    continue
-            
-            doc.close()
-            
-            if not all_text:
-                logger.warning(f"No extractable text found in any page of: {filepath}")
-                return ""
-            
-            combined_text = "\n\n".join(all_text)
-            logger.info(f"✅ Fallback extraction succeeded: {len(combined_text)} chars from {len(all_text)} pages")
-            
-            # Clean the text
-            cleaned_text = self.clean_for_embeddings(combined_text)
-            
-            if not cleaned_text.strip():
-                logger.warning(f"Cleaning resulted in empty text for: {filepath}")
-                return ""
-            
-            logger.info(f"Final cleaned text: {len(cleaned_text)} chars")
-            return cleaned_text
+            return {
+                "content": cleaned_content,
+                "metadata": metadata
+            }
             
         except Exception as e:
-            logger.error(f"❌ Fallback extraction also failed for {filepath}: {type(e).__name__}: {e}", exc_info=True)
-            return ""
+            logger.error(f"Docling extraction failed for {filepath}: {e}", exc_info=True)
+            return None
+
