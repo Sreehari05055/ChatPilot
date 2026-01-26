@@ -69,12 +69,6 @@ def get_system_prompt(tone_style: ToneStyle, context: str = "") -> str:
                 - **Confidentiality**: 
                     - Never reveal tool names, function names, method names, internal identifiers, or raw JSON.
 
-                
-                '''
-                CONTEXT
-                {context}
-                '''
-
                 OUTPUT STRUCTURE  
                 {instructions['output_structure']}
                 - Whenever you use information from **get_info** or **get_info_with_explanation**, append a brief source reference (e.g., "[Source: Internal KB]")

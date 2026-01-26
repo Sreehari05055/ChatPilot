@@ -23,43 +23,6 @@ class ChatbotService:
         self.tools = get_tool_schemas()
         self.llm_with_tools = self.llm.bind_tools(self.tools)
 
-    def _update_system_message(self, context_chunks=None, file_context=None):
-        """Build system message with RAG context."""
-        file_context = file_context or {}
-        file_metadata = file_context.get("file_metadata", {})
-        file_paths = file_context.get("file_paths", [])
-        
-        formatted_context = "No relevant knowledge base entries found."
-        if context_chunks:
-            if isinstance(context_chunks, list):
-                formatted_context = "\n".join(context_chunks)
-            else:
-                formatted_context = str(context_chunks)
-
-        msg = self.system_prompt.replace("{context}", formatted_context)
-
-        msg = self.system_prompt.replace("{context}", formatted_context)
-
-        # Ensure all existing files are listed, regardless of metadata status
-        if file_paths:
-            msg += "\n\nAVAILABLE FILES (Session Context):\n"
-            for i, path in enumerate(file_paths):
-                filename = os.path.basename(path)
-                meta_tag = ""
-                
-                # Check if we have metadata for this path
-                if path in file_metadata:
-                    meta_tag = " [Full Schema Available]"
-                elif filename in file_metadata: 
-                    meta_tag = " [Full Schema Available]"
-                else:
-                    meta_tag = " [Path Only - Use 'extract_metadata' to see columns]"
-                
-                msg += f"- {path}{meta_tag}\n"
-            
-            msg += "\nTo analyze or get details for any file, use 'extract_metadata' with the exact paths listed above."
-        
-        return msg
 
     def _convert_to_langchain_messages(self, stored_messages: List[Dict[str, Any]]) -> List[BaseMessage]:
         """Convert stored JSON messages to LangChain Message objects."""
@@ -95,12 +58,10 @@ class ChatbotService:
         return lc_messages
 
     async def _generate_response(self, query: str) -> AsyncGenerator[str, None]:
+        
         try:
-            # 1. Load History & Metadata
+            # 1. Load History & metadata for prompt only
             stored_msgs = await self.store.get_messages(self.session_id)
-            
-            file_metadata_full = await self.store.get_session_metadata(self.session_id)
-            current_system_msg = self._update_system_message(file_context=file_metadata_full)
 
             # 3. Prepare User Message
             user_msg = {"role": "user", "content": query}
@@ -108,12 +69,10 @@ class ChatbotService:
             stored_msgs.append(user_msg)
             
             # 4. Prepare LangChain Messages
-            # Ensure system message is first
-            lc_messages = [SystemMessage(content=current_system_msg)] + self._convert_to_langchain_messages(stored_msgs)
+            lc_messages = [SystemMessage(content=self.system_prompt)] + self._convert_to_langchain_messages(stored_msgs)
 
             # 5. Main Loop (for tool calls)
             while True:
-                # Stream response while accumulating for consistency
                 accumulated_msg = None
                 
                 async for chunk in self.llm_with_tools.astream(lc_messages):
@@ -122,7 +81,6 @@ class ChatbotService:
                     else:
                         accumulated_msg += chunk
                     
-                    # Stream textual content to user
                     if chunk.content:
                          yield f"data: {json.dumps({'content': chunk.content}, ensure_ascii=False)}\n\n"
                 
@@ -130,19 +88,17 @@ class ChatbotService:
                     break
                 
                 # Store Assistant Message
-                # Convert AIMessage to dict format for storage
                 ai_msg_dict = {
                     "role": "assistant",
                     "content": accumulated_msg.content,
                 }
                 
                 if accumulated_msg.tool_calls:
-                    # It decided to call tools
                     tool_calls_data = []
                     for tc in accumulated_msg.tool_calls:
                         tool_calls_data.append({
                             "id": tc["id"],
-                            "type": "function", # OpenAI standard
+                            "type": "function",
                             "function": {
                                 "name": tc["name"],
                                 "arguments": json.dumps(tc["args"]) 
@@ -150,22 +106,20 @@ class ChatbotService:
                         })
                     ai_msg_dict["tool_calls"] = tool_calls_data
                     
-                    # Store it
                     await self.store.add_message(self.session_id, ai_msg_dict)
                     lc_messages.append(accumulated_msg)
 
-                    # Execute Tools
+                    # Execute Tools (Notice: no metadata passed here!)
                     for tc in accumulated_msg.tool_calls:
                         tool_name = tc["name"]
-                        tool_args = tc["args"] # Dict
+                        tool_args = tc["args"]
                         tool_id = tc["id"]
                         
-                        logger.info(f"Invoking tool: {tool_name} with args: {tool_args}")
+                        logger.info(f"Invoking tool: {tool_name}")
                         
                         tool_result_content = await self.tool_executor.execute(
                             tool_name, 
                             json.dumps(tool_args), 
-                            file_metadata_full,
                             self.session_id,
                             self.store
                         )
