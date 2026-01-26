@@ -7,7 +7,7 @@ chromadb
 llama-index
 openai
 anthropic
-pymupdf4llm
+docling
 InquirerPy
 lxml
 python-docx

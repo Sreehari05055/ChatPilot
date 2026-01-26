@@ -4,23 +4,12 @@ import subprocess
 import sys
 
 
-def run_configurator():
-    # Execute the configurator as a module so imports like `app` resolve
-    project_root = Path(__file__).resolve().parent
-    module_name = "scripts.configure"
-    subprocess.run([sys.executable, "-m", module_name], check=True, cwd=str(project_root))
-
 def main():
     parser = argparse.ArgumentParser(description="ChatPilot runner")
-    parser.add_argument("--configure", action="store_true", help="Run interactive configuration wizard and exit")
     parser.add_argument("--dev", action="store_true", help="Run development server (uvicorn) for local testing")
     parser.add_argument("--host", default="0.0.0.0", help="Host for the FastAPI server")
     parser.add_argument("--port", default=8000, type=int, help="Port for the FastAPI server")
     args = parser.parse_args()
-
-    if args.configure:
-        run_configurator()
-        return
 
     if args.dev:
         # Local development runner (kept for convenience)
