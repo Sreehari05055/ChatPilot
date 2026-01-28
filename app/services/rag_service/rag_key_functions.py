@@ -134,12 +134,11 @@ class RAGPipeline:
                     "score": item.score
                 }
                 for item in reranked_nodes
-                if item.score >= 0.6
             ]
 
             # Re-sorting just to be absolutely sure, though reranker usually handles this
-            return sorted(reranked_results, key=lambda x: x["score"], reverse=True)
-
+            return reranked_results
+        
         except Exception as e:
             logger.error(f"Error in global reranker: {e}", exc_info=True)
             return content[:config.TOP_K] # Fallback to top-k if reranking fails

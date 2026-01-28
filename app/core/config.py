@@ -46,7 +46,7 @@ admin = AdminConfig(
     rag=RAGConfig(
         chunk_size=512,
         chunk_overlap=50,
-        top_k=5
+        top_k=20
     ),
     max_conversation_turns=10
 )
