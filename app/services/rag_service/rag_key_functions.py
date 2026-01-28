@@ -22,25 +22,17 @@ class RAGPipeline:
         self.embed_model = HuggingFaceEmbedding(model_name=config.EMBEDDING_MODEL_NAME)
         self.reranker = SentenceTransformerRerank(
             model="BAAI/bge-reranker-v2-m3", 
-            top_n=3
+            top_n=10
         )
-    async def _get_corpus_data(self, questions: Union[str, List[str]]) -> list:
+    async def _get_corpus_data(self, questions: List[str], user_query: str) -> list:
         """
-        Retrieve top-k relevant context chunks for a question or list of questions using LlamaIndex.
-
-        If `questions` is a string, returns a list of context chunks for that question.
-        If `questions` is a list of strings, returns a list where each element is the
-        list of context chunks for the corresponding question.
+        Retrieve top-k relevant context chunks for a question or list of questions.
         """
         try:
             if RAGPipeline.index is None:
                 raise RuntimeError("Index not initialized")
 
             retriever = RAGPipeline.index.as_retriever(similarity_top_k=config.TOP_K)
-
-            single_input = isinstance(questions, str)
-            question_list = [questions] if single_input else questions
-
             sem = asyncio.Semaphore(getattr(config, "MAX_CONCURRENT_QUERIES", 8))
             
             async def _retrieve_and_rerank(q:str) -> List[str]:
@@ -48,25 +40,109 @@ class RAGPipeline:
                     if hasattr(retriever, "aretrieve"):
                         results = await retriever.aretrieve(q)
                     else:
-                        # Fallback for sync-only retriever
                         results = await asyncio.to_thread(retriever.retrieve, q)
 
-                    query_bundle = QueryBundle(q)
-                    reranked_nodes = await asyncio.to_thread(
-                        self.reranker.postprocess_nodes, results, query_bundle=query_bundle
-                    )
                     return [
-                        item.node.get_content(metadata_mode=MetadataMode.LLM)
-                        for item in reranked_nodes
+                        {
+                            "content": item.node.get_content(metadata_mode=MetadataMode.NONE), # Get RAW text here
+                            "id": item.node.id_,
+                            "title": item.node.metadata.get("title", ""),
+                            "doc_id": item.node.metadata.get("doc_id", ""),
+                            "score": item.score
+                        }
+                        for item in results
                     ]
-            tasks = [asyncio.create_task(_retrieve_and_rerank(q)) for q in question_list]
-            all_results = await asyncio.gather(*tasks)
 
-            return all_results[0] if single_input else all_results
+            tasks = [asyncio.create_task(_retrieve_and_rerank(q)) for q in questions]
+            all_results = await asyncio.gather(*tasks)
+            flattened_results = [item for sublist in all_results for item in sublist]
+            
+            # 1. Broad deduplication
+            unique_results = await self._remove_duplicates(flattened_results)
+            
+            # 2. Precise Global Reranking against the rephrased user query
+            final_results = await self._global_reranker(unique_results, user_query)
+            
+            return final_results
 
         except Exception as e:
             logger.error(f"Error retrieving corpus data: {e}", exc_info=True)
             raise
+
+    async def _remove_duplicates(self, content: list):
+        """
+        Deduplicates results and keeps the highest scoring chunks.
+        
+        :param content: List of document dictionaries with 'id' and 'score' keys.
+        :return: List of top-k unique document dictionaries.
+        """
+        try:
+            import hashlib
+            seen_hashes = set()
+            unique_docs = []
+
+            for doc in content:
+                # Deduplicate by content hash to handle identical text with different IDs
+                content_hash = hashlib.md5(doc["content"].encode('utf-8')).hexdigest()
+                
+                if content_hash not in seen_hashes:
+                    unique_docs.append(doc)
+                    seen_hashes.add(content_hash)
+            
+            return unique_docs
+
+        except Exception as e:
+            logger.error(f"Error in reciprocal ranker: {e}", exc_info=True)
+            raise
+
+    async def _global_reranker(self, content: list, user_query: str):
+        """
+        Final high-precision reranking using the cross-encoder.
+        """
+        try:
+            if not content:
+                return []
+
+            query_bundle = QueryBundle(user_query)
+            
+            from llama_index.core.schema import NodeWithScore, TextNode
+            
+            nodes_with_score = [
+                NodeWithScore(
+                    node=TextNode(
+                        text=item["content"], 
+                        id_=item["id"], 
+                        metadata={"title": item["title"], "doc_id": item["doc_id"]}
+                    ),
+                    score=item["score"]
+                )
+                for item in content
+            ]
+
+            reranked_nodes = await asyncio.to_thread(
+                self.reranker.postprocess_nodes, 
+                nodes_with_score, 
+                query_bundle=query_bundle
+            )
+            
+            reranked_results = [
+                {
+                    "content": item.node.get_content(metadata_mode=MetadataMode.LLM),
+                    "id": item.node.id_,
+                    "title": item.node.metadata.get("title", ""),
+                    "doc_id": item.node.metadata.get("doc_id", ""),
+                    "score": item.score
+                }
+                for item in reranked_nodes
+                if item.score >= 0.6
+            ]
+
+            # Re-sorting just to be absolutely sure, though reranker usually handles this
+            return sorted(reranked_results, key=lambda x: x["score"], reverse=True)
+
+        except Exception as e:
+            logger.error(f"Error in global reranker: {e}", exc_info=True)
+            return content[:config.TOP_K] # Fallback to top-k if reranking fails
 
     async def _load_index(self):
         """Load the existing index from disk without rebuilding."""

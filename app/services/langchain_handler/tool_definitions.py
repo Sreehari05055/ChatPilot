@@ -39,7 +39,8 @@ class ListFiles(BaseModel):
 
 class GetInfo(BaseModel):
     """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough."""
-    topic: List[str] = Field(description="The specific fact or entity to find.")
+    topic: List[str] = Field(description="The specific context keywords to retrieve.")
+    question: str = Field(description="The complete, rephrased user question (resolving pronouns like 'it', 'they') for final relevance scoring.")
 
 class ExtractMetadata(BaseModel):
     """Extract column names, types, and summary info from specific uploaded files."""

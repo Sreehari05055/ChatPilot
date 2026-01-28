@@ -72,7 +72,10 @@ class ToolExecutor:
         return research_results
 
     async def _execute_get_info(self, args, ctx):
-        return await self.rag_service.get_info(args.get("topic"))
+        return await self.rag_service.get_info(
+            queries=args.get("topic"),
+            user_query=args.get("question")
+        )
 
     async def _execute_extract_metadata(self, args, ctx):
         """
