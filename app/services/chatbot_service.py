@@ -73,6 +73,7 @@ class ChatbotService:
 
             # 5. Main Loop (for tool calls)
             while True:
+                stop_call = False
                 accumulated_msg = None
                 
                 async for chunk in self.llm_with_tools.astream(lc_messages):

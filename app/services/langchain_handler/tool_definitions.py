@@ -39,8 +39,13 @@ class ListFiles(BaseModel):
 
 class GetInfo(BaseModel):
     """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough."""
-    topic: List[str] = Field(description="The specific context keywords to retrieve.")
-    question: str = Field(description="The complete, rephrased user question (resolving pronouns like 'it', 'they') for final relevance scoring.")
+    topic: List[str] = Field(description=(        
+        "Semantically rewritten search queries derived from the user question. "
+        "Each item should be a full natural-language query optimized for vector retrieval, "
+        "DO NOT return single words or keyword lists."))
+    question: str = Field(description=(        
+        "A minimally normalized version of the original question "
+        "(e.g., resolving pronouns), without changing scope or intent."))
 
 class ExtractMetadata(BaseModel):
     """Extract column names, types, and summary info from specific uploaded files."""
