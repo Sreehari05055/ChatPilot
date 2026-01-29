@@ -21,7 +21,7 @@ class ChatbotService:
         self.tool_executor = ToolExecutor(http_client=http_client)
         self.llm = LangChainService.get_llm()
         self.tools = get_tool_schemas()
-        self.llm_with_tools = self.llm.bind_tools(self.tools)
+        self.llm_with_tools = self.llm.bind_tools(self.tools, strict=True)
 
 
     def _convert_to_langchain_messages(self, stored_messages: List[Dict[str, Any]]) -> List[BaseMessage]:
@@ -73,7 +73,6 @@ class ChatbotService:
 
             # 5. Main Loop (for tool calls)
             while True:
-                stop_call = False
                 accumulated_msg = None
                 
                 async for chunk in self.llm_with_tools.astream(lc_messages):
@@ -96,34 +95,46 @@ class ChatbotService:
                 
                 if accumulated_msg.tool_calls:
                     tool_calls_data = []
-                    for tc in accumulated_msg.tool_calls:
-                        tool_calls_data.append({
-                            "id": tc["id"],
-                            "type": "function",
-                            "function": {
-                                "name": tc["name"],
-                                "arguments": json.dumps(tc["args"]) 
-                            }
-                        })
-                    ai_msg_dict["tool_calls"] = tool_calls_data
-                    
-                    await self.store.add_message(self.session_id, ai_msg_dict)
-                    lc_messages.append(accumulated_msg)
+                    tasks = []
+                    task_ids = []
 
-                    # Execute Tools (Notice: no metadata passed here!)
                     for tc in accumulated_msg.tool_calls:
                         tool_name = tc["name"]
                         tool_args = tc["args"]
                         tool_id = tc["id"]
-                        
-                        logger.info(f"Invoking tool: {tool_name}")
-                        
-                        tool_result_content = await self.tool_executor.execute(
+
+                        tool_calls_data.append({
+                            "id": tool_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(tool_args) 
+                            }
+                        })
+                        tasks.append(self.tool_executor.execute(
                             tool_name, 
                             json.dumps(tool_args), 
                             self.session_id,
                             self.store
-                        )
+                        ))
+                        task_ids.append({"tool_id": tool_id, "tool_name": tool_name, "tool_args": tool_args})
+                    
+                    ai_msg_dict["tool_calls"] = tool_calls_data
+                    
+                    await self.store.add_message(self.session_id, ai_msg_dict)
+                    lc_messages.append(accumulated_msg)
+                    
+                    # 3. Parallel Execution: Run all tools at once
+                    logger.info(f"Invoking {len(tasks)} tools in parallel: {[m['tool_name'] for m in task_ids]}")
+                    tool_results = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    for idx, tool_result in enumerate(tool_results):
+                        tool_id = task_ids[idx]["tool_id"]
+                        tool_name = task_ids[idx]["tool_name"]
+                        if isinstance(tool_result, Exception):
+                            tool_result_content = f"Error executing tool {tool_name}: {str(tool_result)}"
+                        else:
+                            tool_result_content = tool_result
                         
                         # Create Tool Message
                         tool_msg_dict = {
