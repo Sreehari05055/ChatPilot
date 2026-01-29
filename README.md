@@ -21,10 +21,13 @@ Upload CSV or Excel files and ask for insights. ChatPilot functions as a **Data 
 - **Self-Correction**: If the code fails, the agent analyzes the error and automatically retries until it gets the result.
 
 ### 🌐 Agentic Web Research
-Integration with **Tavily** and **Google Search** enables high-fidelity information gathering:
+Integration with **Tavily** or **Google Custom Search** enables high-fidelity information gathering:
 - **Deep Research**: Conducts multi-step, agentic research loops to generate thorough and structured reports—ideal for deep **competitor analysis** and market trends.
 - **Real-Time Knowledge**: Accesses the latest news and specialized finance/news topics.
 - **Web Fetch**: Extracts and cleans content from URLs for use as context in analysis tasks.
+
+### ⚡ Parallel Tool Execution
+ChatPilot supports **parallel tool calls within a single agent step**, allowing multiple retrieval or research tools to run concurrently. This reduces latency, enables multi-source context gathering, and improves efficiency while preserving a single-agent architecture.
 
 ### 🔓 Multi-LLM Flexibility
 Built on **LangChain**, ChatPilot supports switching between top providers. Use the same agent with your preferred model provider:
