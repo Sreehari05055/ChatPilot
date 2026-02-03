@@ -4,8 +4,12 @@
 
 - Python 3.8 or higher
 - pip (Python package manager)
-- OpenAI API key (required)
-- Google Cloud Custom Search API key + CSE ID (optional, for web search)
+- Docker (required for secure code execution sandbox)
+- LLM API key - OpenAI or Anthropic (required)
+- Cohere API key (required for embeddings and RAG reranking)
+- Web Search API key (optional):
+  - **Tavily API key** (recommended for accuracy), OR
+  - Google Cloud Custom Search API key + CSE ID
 
 ## Installation
 
@@ -20,100 +24,125 @@ cd chatpilot
 pip install -r requirements.txt
 ```
 
-### 3. Add documents for RAG (optional)
+### 3. Get API Keys
 
-To use the RAG (document Q&A) feature, add your documents to the `source_files/` directory:
+**Required:**
+1.  **LLM Provider** - Get an API key from:
+    - [OpenAI](https://platform.openai.com/api-keys) (recommended: GPT-4o)
+    - OR [Anthropic](https://console.anthropic.com/) (Claude models)
+2.  **Cohere** - Required for embeddings and RAG reranking:
+    - Sign up at [cohere.com](https://cohere.com/)
+    - Get your free API key from [dashboard.cohere.com](https://dashboard.cohere.com/)
+
+**Optional (for web search):**
+- **Tavily** (recommended): Get your key at [tavily.com](https://tavily.com)
+- OR **Google Custom Search**: 
+  - API key from [Google Cloud Console](https://console.cloud.google.com/)
+  - CSE ID from [cse.google.com](https://cse.google.com)
+
+### 4. Set up environment variables
+
+Create a `.env` file in the project root with your API keys:
+
 ```bash
-# Add your PDFs, text files, or documents here
-cp your_documents.pdf source_files/
-cp your_notes.txt source_files/
+# Required - Choose your LLM provider
+LLM_PROVIDER=openai  # or "anthropic"
+LLM_API_KEY=your_openai_or_anthropic_key
+
+# Required - For RAG reranking
+COHERE_API_KEY=your_cohere_api_key
+
+# Optional - Web Search (choose one)
+TAVILY_API_KEY=your_tavily_api_key  # Recommended for accuracy
+
+# OR use Google Custom Search instead
+WEB_SEARCH_API_KEY=your_google_api_key
+CSE_ID=your_custom_search_engine_id
+
+# Optional - Model selection
+MODEL_NAME=gpt-4o  # or gpt-4o-mini, claude-3-5-sonnet-20241022, etc.
 ```
 
-Supported formats: PDF, TXT, HTML, DOCX, MD
+### 5. Build the Docker sandbox image
 
-The system will automatically index these documents when you start the server.
-
-### 4. Configure ChatPilot
-ChatPilot includes an interactive configuration wizard:
+For secure code execution, build the sandbox container:
 ```bash
-python main.py --configure
+docker build -t python-sandbox:latest -f Dockerfile .
 ```
-This will guide you through:
-- Adding your LLM API key
-- Choosing whether to enable web search
-- If enabled, adding Google Custom Search API key and CSE ID
 
-The wizard creates a `.env` file with your settings automatically.
+### 6. Run ChatPilot
 
-### 5. Run ChatPilot
-
-**Development mode (recommended for pre-release):**
 ```bash
-python main.py --dev
+python main.py
 ```
 
 ## Configuration Options
 
-### Interactive Configuration (`--configure`)
+### Customizing Model & RAG Settings
 
-Sets up your API keys and enables/disables features:
-```bash
-python main.py --configure
-```
-
-**What it configures:**
-- **LLM API key** (required)
-- **Web search toggle** (optional)
-  - If enabled, you'll need:
-    - Google Custom Search API key
-    - Custom Search Engine ID (CSE ID)
-
-### Admin Configuration (`--admin-config`)
-
-Customize ChatPilot's behavior and model settings:
-```bash
-python main.py --admin-config
-```
-**Available settings:**
+Edit `app/core/config.py` to adjust:
 
 **Model Configuration:**
-- Model selection (gpt-5.2, gpt-5, gpt-5-mini, gpt-4.1, gpt-4.1-mini, gpt-4o, gpt-4o-mini, etc)
-- Temperature (0.0 - 2.0) - controls response randomness
-- Top-p (0.0 - 1.0) - nucleus sampling parameter
-- Max tokens - maximum response length
+```python
+admin = AdminConfig(
+    model=ModelConfig(
+        temperature=0.7,      # 0.0-2.0: controls randomness
+        max_tokens=4096,      # Maximum response length
+        top_p=0.9            # 0.0-1.0: nucleus sampling
+    ),
+    rag=RAGConfig(
+        chunk_size=512,      # How documents are split
+        chunk_overlap=50,    # Overlap between chunks
+        top_k=20            # Number of chunks to retrieve
+    ),
+    max_conversation_turns=10  # Chat history context
+)
+```
 
-**System Behavior:**
-- Character/tone (friendly, professional, concise, creative)
+**System Prompt Customization:**
+```python
+# In config.py, change the tone style:
+system_prompt = get_system_prompt(ToneStyle.PROFESSIONAL)
+# Options: PROFESSIONAL, FRIENDLY, CONCISE, CREATIVE
+```
 
-**RAG Settings:**
-- Text chunk size - how documents are split for embedding
-- Chunk overlap - overlap between chunks for better context
-- Number of chunks to retrieve - how many relevant chunks to use per query
-- Max conversation turns - how much chat history to keep in context
-- Maximum history messages - limit on stored conversation length
+### Web Search Providers
+
+ChatPilot supports two web search providers:
+
+1.  **Tavily** (Recommended): More accurate, optimized for AI applications
+    - Get your API key at [tavily.com](https://tavily.com)
+    - Set `TAVILY_API_KEY` in `.env`
+2.  **Google Custom Search**: Traditional search with broader coverage
+    - Get API key from Google Cloud Console
+    - Create a Custom Search Engine at [cse.google.com](https://cse.google.com)
+    - Set `WEB_SEARCH_API_KEY` and `CSE_ID` in `.env`
 
 
 ## Usage
 
-### Starting the development server
+### Starting the server
 ```bash
-python main.py --dev
+python main.py
 ```
 
-Server runs on `http://localhost:8000` with auto-reload.
+Server runs on `http://localhost:8000` with 4 worker processes for production-grade performance.
 
-### Adding/updating documents for RAG
+### Adding documents for RAG
 
-Simply add or remove files from the `source_files/` directory and restart the server. The documents will be re-indexed automatically.
+Use the web interface to upload documents:
+1.  Navigate to the ingestion section in the UI
+2.  Upload your files (PDF, TXT, HTML, DOCX, MD, Scanned documents (OCR-enabled))  
+3.  Documents are automatically indexed and ready for Q&A
 
-### Reconfigure settings
+No need to manually place files in directories or restart the server.
 
-**Update API keys or toggle features:**
-```bash
-python main.py --configure
-```
+### Updating configuration
 
-**Adjust model and behavior settings:**
-```bash
-python main.py --admin-config
-```
+**To change API keys or add new providers:**
+- Edit the `.env` file in the project root
+- Restart the server to apply changes
+
+**To adjust model behavior, RAG settings, or system prompt:**
+- Edit `app/core/config.py`
+- Restart the server to apply changes
