@@ -33,6 +33,7 @@ from app.services.state_manager import FileHistoryStore
 from starlette.middleware.sessions import SessionMiddleware
 from app.services.code_execution.execution_service import CodeExecutionService
 from app.services.langchain_handler.tool_executor import ToolExecutor
+from fastapi.middleware.cors import CORSMiddleware
 
 # Ensure application data directories exist (after Config import)
 if not os.path.exists(Config.DATA_DIR):
@@ -60,6 +61,15 @@ def create_app() -> FastAPI:
             await http_client.aclose()
 
     app = FastAPI(lifespan=lifespan)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://127.0.0.1:5000", "http://localhost:3000", "http://localhost:5173"],  # For production robustness, though you might want to restrict this in the future
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.add_middleware(
             SessionMiddleware, 
             secret_key="secret-key" # Change this to a real secret
