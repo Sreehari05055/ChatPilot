@@ -42,30 +42,39 @@ Built on **LangChain**, ChatPilot supports switching between top providers. Use 
 ## 🛠️ Tech Stack
 
 - **Backend**: FastAPI (Python 3.10+)
+- **Server**: Uvicorn (ASGI server with multi-worker support)
 - **Orchestration**: LangChain (Full tool-calling support)
 - **Data Agent**: LangGraph (For iterative code execution and self-correction)
 - **Vector Store**: ChromaDB
-- **Tools**: Tavily API, Docling (Document Intelligence), Google Custom Search, Python Sandbox
+- **Embeddings & Reranking**: Cohere API (For document embeddings and RAG result optimization)
+- **Containerization**: Docker (Secure code execution sandbox)
+- **Document Processing**: Docling (Advanced document intelligence with OCR)
+- **Web Search**: Tavily API, Google Custom Search
+- **Code Execution**: Isolated Docker sandbox with resource limits
 
 ---
 
 ## 🏁 Getting Started
 
-1. **Setup Environment**:
-   Copy `.env.example` to `.env` and add your API keys.
-   ```bash
-   cp .env.example .env
-   ```
+For detailed setup instructions including prerequisites, API key configuration, and Docker setup, see **[docs/SETUP.md](docs/SETUP.md)**.
 
-2. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Quick Start:**
+```bash
+# 1. Clone and install dependencies
+git clone https://github.com/Sreehari05055/ChatPilot.git
+cd ChatPilot
+pip install -r requirements.txt
 
-3. **Run the Server**:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
+# 2. Set up your .env file with API keys (see docs/SETUP.md)
+
+# 3. Build Docker sandbox
+docker build -t python-sandbox:latest -f Dockerfile .
+
+# 4. Run the server
+python main.py
+```
+
+Server runs on `http://localhost:8000` with 4 worker processes.
 
 ---
 
