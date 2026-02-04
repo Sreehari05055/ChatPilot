@@ -32,7 +32,9 @@ class TavilyWebSearchService(BaseWebSearchService):
                 content = r.get("content", "")
                 url = r.get("url", "")
                 formatted.append(f"Title: {title}\nContent: {content}\nLink: {url}")
-            return "\n\n".join(formatted)
+            context = "\n\n".join(formatted)
+            logger.info(f"Tavily search returned {context}")
+            return context
         except Exception as e:
             logger.error(f"Tavily search failed: {e}", exc_info=True)
             return f"Search error: {str(e)}"
