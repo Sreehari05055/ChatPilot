@@ -6,7 +6,9 @@
 - pip (Python package manager)
 - Docker (required for secure code execution sandbox)
 - LLM API key - OpenAI or Anthropic (required)
-- Cohere API key (required for embeddings and RAG reranking)
+- **RAG Provider** (choose one):
+  - **Local**: No API key needed - uses HuggingFace embeddings (BAAI BGE-small-en-v1.5) + BGE reranker (fully offline)
+  - **Cloud**: Cohere API key (1024D embeddings with built-in reranking)
 - Web Search API key (optional):
   - **Tavily API key** (recommended for accuracy), OR
   - Google Cloud Custom Search API key + CSE ID
@@ -30,9 +32,9 @@ pip install -r requirements.txt
 1.  **LLM Provider** - Get an API key from:
     - [OpenAI](https://platform.openai.com/api-keys) (recommended: GPT-4o)
     - OR [Anthropic](https://console.anthropic.com/) (Claude models)
-2.  **Cohere** - Required for embeddings and RAG reranking:
-    - Sign up at [cohere.com](https://cohere.com/)
-    - Get your free API key from [dashboard.cohere.com](https://dashboard.cohere.com/)
+2.  **RAG Provider** (choose one):
+    - **Local**: No setup needed - automatically uses HuggingFace models (BAAI BGE-small-en-v1.5 embeddings + BGE reranker-v2-m3)
+    - **Cloud**: Sign up at [cohere.com](https://cohere.com/) for 1024D embeddings with built-in reranking
 
 **Optional (for web search):**
 - **Tavily** (recommended): Get your key at [tavily.com](https://tavily.com)
@@ -49,8 +51,9 @@ Create a `.env` file in the project root with your API keys:
 LLM_PROVIDER=openai  # or "anthropic"
 LLM_API_KEY=your_openai_or_anthropic_key
 
-# Required - For RAG reranking
-COHERE_API_KEY=your_cohere_api_key
+# RAG Provider (optional - defaults to local HuggingFace if not set)
+# Leave COHERE_API_KEY empty to use local BGE embeddings
+COHERE_API_KEY=  # Add your key here only if you want to use Cohere embeddings
 
 # Optional - Web Search (choose one)
 TAVILY_API_KEY=your_tavily_api_key  # Recommended for accuracy

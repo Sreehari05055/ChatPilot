@@ -13,6 +13,7 @@ Powered by **Docling**, ChatPilot supports complex document understanding, inclu
 - **Context Re-evaluation**: Linked content and retrieved snippets are dynamically re-evaluated by the agent for relevance.
 - **Sub-clause Retrieval**: The LLM can explicitly call for sub-clauses to retrieve deep context when simpler retrieval isn't enough.
 - **Scanned Document Support**: Handles OCR and layout analysis for scanned PDFs and images using **Docling**.
+- **🎯 PDF Highlighting**: Precise coordinate-based highlighting in the frontend - retrieved chunks are highlighted directly in the PDF viewer with element-level bounding boxes.
 
 ### 📊 Autonomous Data Analysis
 Upload CSV or Excel files and ask for insights. ChatPilot functions as a **Data Analyst Agent**:
@@ -43,12 +44,14 @@ Built on **LangChain**, ChatPilot supports switching between top providers. Use 
 
 - **Backend**: FastAPI (Python 3.10+)
 - **Server**: Uvicorn (ASGI server with multi-worker support)
-- **Orchestration**: LangChain (Full tool-calling support)
+- **Agent Framework**: LangChain (Single-agent architecture with parallel tool execution)
 - **Data Agent**: LangGraph (For iterative code execution and self-correction)
 - **Vector Store**: ChromaDB
-- **Embeddings & Reranking**: Cohere API (For document embeddings and RAG result optimization)
+- **Embeddings & Reranking**: 
+  - **Local Option**: HuggingFace embeddings (BAAI BGE-small-en-v1.5) + BGE reranker-v2-m3 (fully offline)
+  - **Cloud Option**: Cohere API (1024D embeddings with reranking)
 - **Containerization**: Docker (Secure code execution sandbox)
-- **Document Processing**: Docling (Advanced document intelligence with OCR)
+- **Document Processing**: Docling (Advanced document intelligence with OCR and bbox extraction)
 - **Web Search**: Tavily API, Google Custom Search
 - **Code Execution**: Isolated Docker sandbox with resource limits
 
