@@ -20,3 +20,4 @@ langchain-anthropic
 langgraph
 slowapi
 docker
+pypdf
