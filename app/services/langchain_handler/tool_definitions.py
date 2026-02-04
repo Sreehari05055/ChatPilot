@@ -1,13 +1,19 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Literal
 
 class WebSearch(BaseModel):
     """Search the web for general knowledge, current events, or information NOT related to uploaded files. Do NOT use this for analyzing uploaded data."""
     question: str = Field(description="The user's question to be rephrased and web searched.")
     topic: Optional[Literal["general", "news", "finance"]] = Field(default="general", description="The search category. Use 'news' or 'finance' for more specialized results.")
-    time_range: Optional[Literal["day", "week", "month", "year"]] = Field(default=None, description="The time range to restrict search results to.")
-    start_date: Optional[str] = Field(default=None, description="Start date for search results (YYYY-MM-DD format).")
-    end_date: Optional[str] = Field(default=None, description="End date for search results (YYYY-MM-DD format).")
+    time_range: Optional[Literal["day", "week", "month", "year"]] = Field(default=None, description="The time range to restrict search results to. Mutually exclusive with start_date and end_date.")
+    start_date: Optional[str] = Field(default=None, description="Start date for search results (YYYY-MM-DD format). Mutually exclusive with time_range.")
+    end_date: Optional[str] = Field(default=None, description="End date for search results (YYYY-MM-DD format). Mutually exclusive with time_range.")
+
+    @model_validator(mode='after')
+    def validate_date_params(self) -> 'WebSearch':
+        if self.time_range and (self.start_date or self.end_date):
+            raise ValueError("When time_range is set, start_date or end_date cannot be set")
+        return self
     
 class WebFetch(BaseModel):
     """Fetch and analyze the content of a specific URL provided by the user."""
@@ -62,14 +68,14 @@ class ExecuteCode(BaseModel):
 
 def get_tool_schemas():
     return [
-        WebSearch,
+        AnalyzeData,
+        ExecuteCode,
+        ExtractMetadata,
+        GenerateCode,
+        GetInfo,
+        ListFiles,
         WebFetch,
         WebResearch,
-        AnalyzeData,
-        GetInfo,
-        ExtractMetadata,
-        ListFiles,
-        GenerateCode,
-        ExecuteCode
+        WebSearch
     ]
 

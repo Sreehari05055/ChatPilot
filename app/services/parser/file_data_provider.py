@@ -18,21 +18,30 @@ class FileDataProvider(BaseDataProvider):
                 parser = ParserFactory.get_parser(filepath)
                 result = parser.extract(filepath)
 
-                if not result or not isinstance(result, dict):
+                if not result:
                     continue
                 
-                content = result.get("content", "")
-                metadata = result.get("metadata", {})
+                # Handle both single dict and list of segments (for multi-page PDFs)
+                if isinstance(result, dict):
+                    result = [result]
                 
-                if not content or not content.strip():
-                    continue
-                
-                yield {
-                    "id": doc_id,
-                    "title": metadata.get("title", title),
-                    "content": content,
-                    "metadata": metadata
-                }
+                for idx, segment in enumerate(result):
+                    content = segment.get("content", "")
+                    metadata = segment.get("metadata", {})
+                    
+                    if not content or not content.strip():
+                        continue
+                    
+                    # Create unique ID: original_id for single-page, original_id_p1 for multi-page
+                    page_label = metadata.get("page_label")
+                    segment_id = f"{doc_id}_p{page_label}" if page_label else doc_id
+                    
+                    yield {
+                        "id": segment_id,
+                        "title": metadata.get("title", title),
+                        "content": content,
+                        "metadata": metadata
+                    }
 
             except ValueError:
                 continue  

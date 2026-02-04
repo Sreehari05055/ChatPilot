@@ -4,14 +4,15 @@ from app.services.code_execution.base_handler_factory import BaseFileHandler
 import os
 
 class ToolExecutor:
-    def __init__(self, http_client=None):
+    def __init__(self, web_search_provider=None, rag_pipeline=None, http_client=None):
         from app.services.web.web_search_factory import WebSearchProviderFactory
         from app.services.code_execution.execution_service import CodeExecutionService
         from app.services.rag_service.rag_execution_service import RAGExecutionService
 
-        self.web_search_service = WebSearchProviderFactory.get_provider(http_client=http_client)
+        # Use injected provider or fallback to factory (for backwards compatibility)
+        self.web_search_service = web_search_provider or WebSearchProviderFactory.get_provider(http_client=http_client)
         self.code_executor = CodeExecutionService()
-        self.rag_service = RAGExecutionService()
+        self.rag_service = RAGExecutionService(pipeline=rag_pipeline)
 
     async def execute(self, function_name, args_str, session_id=None, store=None):
         """Dynamic tool dispatcher."""
@@ -61,7 +62,9 @@ class ToolExecutor:
 
     async def _execute_web_search(self, args, ctx):
         query = args.pop("question")
-        return await self.web_search_service.run_web_search(query, **args)
+        # Clean up args to remove None or 'null' values that Tavily might reject
+        clean_args = {k: v for k, v in args.items() if v is not None and v != "null"}
+        return await self.web_search_service.run_web_search(query, **clean_args)
 
     async def _execute_web_fetch(self, args, ctx):
         return await self.web_search_service.web_fetch(args.get("url", ""))

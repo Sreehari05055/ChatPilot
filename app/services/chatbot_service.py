@@ -12,13 +12,17 @@ import os
 config = Config()
 
 class ChatbotService:
-    def __init__(self, system_prompt: str, store, session_id: str, http_client):
+    def __init__(self, system_prompt: str, store, session_id: str, http_client, web_search_provider=None, rag_pipeline=None):
         from app.services.langchain_handler.tool_executor import ToolExecutor
         self.system_prompt = system_prompt
         self.store = store
         self.session_id = session_id
         self.http_client = http_client
-        self.tool_executor = ToolExecutor(http_client=http_client)
+        self.tool_executor = ToolExecutor(
+            web_search_provider=web_search_provider,
+            rag_pipeline=rag_pipeline,
+            http_client=http_client
+        )
         self.llm = LangChainService.get_llm()
         self.tools = get_tool_schemas()
         self.llm_with_tools = self.llm.bind_tools(self.tools, strict=True)
@@ -131,22 +135,29 @@ class ChatbotService:
                     for idx, tool_result in enumerate(tool_results):
                         tool_id = task_ids[idx]["tool_id"]
                         tool_name = task_ids[idx]["tool_name"]
+                        
+                        tool_result_content = ""
                         if isinstance(tool_result, Exception):
                             tool_result_content = f"Error executing tool {tool_name}: {str(tool_result)}"
+                        elif isinstance(tool_result, dict) and "context_text" in tool_result:
+
+                            tool_result_content = tool_result["context_text"]
+                            sources = tool_result.get("sources", [])
+                            yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
                         else:
-                            tool_result_content = tool_result
+                            tool_result_content = str(tool_result)
                         
-                        # Create Tool Message
+                        # Create Tool Message (LLM only sees the content)
                         tool_msg_dict = {
                             "role": "tool",
                             "tool_call_id": tool_id,
                             "name": tool_name,
-                            "content": str(tool_result_content)
+                            "content": tool_result_content
                         }
                         await self.store.add_message(self.session_id, tool_msg_dict)
                         lc_messages.append(ToolMessage(
                             tool_call_id=tool_id,
-                            content=str(tool_result_content),
+                            content=tool_result_content,
                             name=tool_name
                         ))
 

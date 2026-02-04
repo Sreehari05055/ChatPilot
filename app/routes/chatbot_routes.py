@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.schemas.schemas import ChatRequest
 import asyncio
 import uuid
+from fastapi.responses import FileResponse
 from app.services.chatbot_service import ChatbotService
 
 chatbot_bp = APIRouter()
@@ -21,7 +22,7 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return PlainTextResponse("Rate limit exceeded", status_code=HTTP_429_TOO_MANY_REQUESTS)
 
 
-def init_chatbot_routes(app, system_prompt, history_store, http_client):
+def init_chatbot_routes(app, system_prompt, history_store, http_client, web_search_provider, rag_pipeline):
 
     @chatbot_bp.post('/api/chat', response_class=StreamingResponse)
     @limiter.limit("10/minute")
@@ -74,7 +75,9 @@ def init_chatbot_routes(app, system_prompt, history_store, http_client):
                 system_prompt=system_prompt, 
                 store=history_store, 
                 session_id=session_id, 
-                http_client=http_client
+                http_client=http_client,
+                web_search_provider=web_search_provider,
+                rag_pipeline=rag_pipeline
             )
 
             async def event_stream():
@@ -156,6 +159,54 @@ def init_chatbot_routes(app, system_prompt, history_store, http_client):
             "session_id": session_id,
             "message": "New conversation created"
         })
+    
+    @chatbot_bp.get("/api/files/{doc_id}/page/{page_number}")
+    async def get_pdf_page(doc_id: str, page_number: int):
+        """Serve a specific page from a PDF document."""
+        try:
+            safe_filename = os.path.basename(doc_id)
+            file_path = os.path.join(Config.DATA_DIR, safe_filename)
+            
+            if not os.path.exists(file_path):
+                return JSONResponse(content={"error": "File not found"}, status_code=404)
+            
+            # For non-PDF files, serve the whole file
+            if not doc_id.lower().endswith('.pdf'):
+                return FileResponse(file_path)
+            
+            # Extract specific page from PDF
+            from pypdf import PdfReader, PdfWriter
+            import io
+            
+            reader = PdfReader(file_path)
+            
+            # Validate page number (1-indexed from frontend, 0-indexed in pypdf)
+            if page_number < 1 or page_number > len(reader.pages):
+                return JSONResponse(
+                    content={"error": f"Invalid page number. PDF has {len(reader.pages)} pages."},
+                    status_code=400
+                )
+            
+            # Create a single-page PDF
+            writer = PdfWriter()
+            writer.add_page(reader.pages[page_number - 1])  # Convert to 0-indexed
+            
+            # Write to bytes buffer
+            output = io.BytesIO()
+            writer.write(output)
+            output.seek(0)
+            
+            return StreamingResponse(
+                output,
+                media_type='application/pdf',
+                headers={
+                    'Content-Disposition': f'inline; filename="{doc_id}_page_{page_number}.pdf"'
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Error serving PDF page: {e}", exc_info=True)
+            return JSONResponse(content={"error": "Failed to extract page"}, status_code=500)
     
     app.include_router(chatbot_bp)
     app.state.limiter = limiter
