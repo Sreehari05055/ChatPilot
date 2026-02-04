@@ -19,23 +19,26 @@ async def test_get_info():
     await rag_service.init_index()
     
     keywords = [
-        'college students', 
-        'graduates', 
+        'how did they solve the nested loop problem', 
+        'what is blacklisting', 
     ]
-    user_query = "Provide information on college students and graduates numbers"
+    user_query = "Provide information on blacklisting and nestedloop concepts."
     print(f"🔍 Testing 'get_info' with keywords: {keywords}")
     
     try:
-        # get_info returns a formatted string (though currently the user has commented out the return)
-        # But it also prints the items inside now based on the user's latest change.
+        # get_info returns a dict with 'context_text' and 'sources'
         result = await rag_service.get_info(keywords, user_query)
         
         print("\n✅ RAG Retrieval Result:")
         print("-" * 50)
         if result:
-            print(result)
+            print("Context Text:")
+            print(result['context_text'])
+            print(f"\n📊 Retrieved {len(result['sources'])} sources")
+            for i, source in enumerate(result['sources'][:3], 1):
+                print(f"\n[{i}] Doc: {source['doc_id']}, Page: {source.get('page_label', 'N/A')}, Score: {source.get('score', 0.0):.4f}")
         else:
-            print("No result returned (check if return statement is commented out in rag_execution_service.py)")
+            print("No result returned")
         print("-" * 50)
         
     except Exception as e:

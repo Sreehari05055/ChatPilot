@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
     
 from app.services.rag_service.rag_execution_service import RAGExecutionService
-from app.services.rag_service.rag_key_functions import RAGPipeline
+from app.services.rag_service.base_rag_pipeline import BaseRAGPipeline
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,15 +34,15 @@ async def main():
         print("INDEX_BUILD_FAILED")
         sys.exit(1)
 
-    if RAGPipeline.index is None:
-        logger.error("RAGPipeline.index is None after rebuild")
+    if BaseRAGPipeline.index is None:
+        logger.error("BaseRAGPipeline.index is None after rebuild")
         print("INDEX_BUILD_FAILED")
         sys.exit(1)
 
     logger.info("RAG index rebuild completed successfully")
     print("INDEX_BUILD_SUCCESS")
     # Optional: print index type for debug
-    print(f"Index type: {type(RAGPipeline.index)}")
+    print(f"Index type: {type(BaseRAGPipeline.index)}")
     sys.exit(0)
 
 if __name__ == "__main__":
