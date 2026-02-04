@@ -24,6 +24,7 @@ class RAGConfig:
     chunk_size: int = 512
     chunk_overlap: int = 50
     top_k: int = 5
+    top_n: int = 10
 
 
 @dataclass
@@ -46,7 +47,8 @@ admin = AdminConfig(
     rag=RAGConfig(
         chunk_size=512,
         chunk_overlap=50,
-        top_k=20
+        top_k=20,
+        top_n=10
     ),
     max_conversation_turns=10
 )
@@ -75,13 +77,15 @@ class Config:
         CHUNK_SIZE = admin.rag.chunk_size
         CHUNK_OVERLAP = admin.rag.chunk_overlap
         TOP_K = admin.rag.top_k
+        TOP_N = admin.rag.top_n
+        
+        RERANKING_MODEL = os.getenv("RERANKING_MODEL", "BAAI/bge-reranker-v2-m3")
+        EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
         # Conversation settings
         MAX_CONVERSATION_TURNS = admin.max_conversation_turns
         HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", 30.0))  # seconds
         WEB_SEARCH_NUM_RESULTS = int(os.getenv("WEB_SEARCH_NUM_RESULTS", 5))
-        EMBEDDING_DIM = 1024  # Dimension for BGE-2.0 models
-        EMBEDDING_MODEL_NAME = "BAAI/bge-large-en-v1.5"
         COLLECTION_NAME = "chat_collection"
         EXEC_MAX_RETRIES = int(os.getenv("EXEC_MAX_RETRIES", 3))
 
