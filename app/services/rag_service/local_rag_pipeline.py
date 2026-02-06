@@ -18,9 +18,15 @@ class LocalRAGPipeline(BaseRAGPipeline):
         # Use Jina v2 for embeddings
         embedding_model_name = getattr(Config, "EMBEDDING_MODEL", "BAAI/bge-m3-small-v1.5")  # Default to a smaller model for local use
         
+        # Configure device based on GPU acceleration flag
+        device = "cuda" if Config.USE_GPU_ACCELERATION else "cpu"
+        
         self.embed_model = HuggingFaceEmbedding(
             model_name=embedding_model_name,
+            device=device,
         )
+        
+        logger.info(f"Using device: {device}")
         
         # Local cross-encoder reranker
         self.reranker = FlagEmbeddingReranker(
