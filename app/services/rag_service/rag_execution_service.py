@@ -22,7 +22,7 @@ class RAGExecutionService:
         
         # 1. Format for the LLM (internal reasoning) - Including Score for relevance check
         formatted_context = "\n\n".join([
-            f"SOURCE: {n['doc_id']} (Page {n.get('page_label', 'N/A')})\n"
+            f"SOURCE: {n['title']} (Pages {', '.join(map(str, n.get('pages', [])))})\n"
             f"RELEVANCE SCORE: {n.get('score', 0.0):.4f}\n"
             f"CONTENT: {n['content']}" 
             for n in context_list

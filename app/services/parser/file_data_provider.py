@@ -32,9 +32,8 @@ class FileDataProvider(BaseDataProvider):
                     if not content or not content.strip():
                         continue
                     
-                    # Create unique ID: original_id for single-page, original_id_p1 for multi-page
-                    page_label = metadata.get("page_label")
-                    segment_id = f"{doc_id}_p{page_label}" if page_label else doc_id
+                    # Generate unique ID for each chunk
+                    segment_id = f"{doc_id}_c{idx}"
                     
                     yield {
                         "id": segment_id,

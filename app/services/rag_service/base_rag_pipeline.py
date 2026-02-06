@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List
 from app import logger
 from app.core.config import Config
+import json
 
 class BaseRAGPipeline(ABC):
     """
@@ -71,8 +72,7 @@ class BaseRAGPipeline(ABC):
                     "content": n.get_content(MetadataMode.NONE),
                     "id": n.node.id_,
                     "title": n.node.metadata.get("title", ""),
-                    "doc_id": n.node.metadata.get("doc_id", ""),
-                    "page_label": n.node.metadata.get("page_label", ""),
+                    "pages": json.loads(n.node.metadata.get("pages", "[]")),
                     "bboxes": json.loads(n.node.metadata.get("bboxes", "[]")),
                     "score": n.score,
                 }
@@ -137,8 +137,7 @@ class BaseRAGPipeline(ABC):
                 # Positive scores: use 10% of max with 0.01 floor
                 threshold = max(max_score * 0.1, 0.01)
             else:
-                # Negative scores: use 2x of max (which is negative) with -0.01 ceiling
-                threshold = min(max_score * 1.8, -10)
+                threshold = max(max_score * 1.8, -10)
             
             for node in reranked_nodes:
                 if node.score >= threshold:
@@ -200,7 +199,8 @@ class BaseRAGPipeline(ABC):
             from llama_index.vector_stores.chroma import ChromaVectorStore
             from llama_index.core.node_parser import SemanticSplitterNodeParser
             from app.services.parser import FileDataProvider
-            
+            from llama_index.core.node_parser import SentenceSplitter
+            nodes = []
             logger.info("Starting full RAG index rebuild...")
             
             # 1. Clear existing storage
@@ -223,16 +223,16 @@ class BaseRAGPipeline(ABC):
             
             for data in raw_documents:
                 metadata = data.get("metadata", {}).copy()
-                metadata["doc_id"] = data.get("id", "").split("_p")[0]
-                
-                if "bboxes" in metadata:
-                    import json
-                    metadata["bboxes"] = json.dumps(metadata["bboxes"])
+                for key, value in metadata.items():
+                    if isinstance(value, (list, dict)):
+                        metadata[key] = json.dumps(value)
                 
                 doc = Document(
                     text=data.get("content", ""), 
                     id_=data.get("id"), 
-                    metadata=metadata
+                    metadata=metadata,
+                    excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
+                    excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
                 )
                 documents.append(doc)
 
@@ -241,33 +241,37 @@ class BaseRAGPipeline(ABC):
                 BaseRAGPipeline.index = None
                 return
             
-            semantic_splitter = SemanticSplitterNodeParser(
-                buffer_size=5,
-                breakpoint_percentile_threshold=95,
-                embed_model=self.get_doc_embed_model(),
-            )
+            # Separate PDF docs (already chunked) from others (need chunking)
+            from llama_index.core.schema import TextNode
+            pdf_docs = [d for d in documents if d.metadata.get("file_type") == "pdf"]
             
-            logger.info("Splitting documents and assigning bounding boxes to chunks...")
-            nodes = await asyncio.to_thread(semantic_splitter.get_nodes_from_documents, documents)
+            # Convert PDF Documents to TextNodes since they're already chunked
+            for doc in pdf_docs:
+                node = TextNode(
+                    text=doc.text,
+                    id_=doc.id_,
+                    metadata=doc.metadata,
+                    excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
+                    excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
+                )
+                nodes.append(node)
             
-            # Assign bboxes: each chunk gets only the boxes for text it contains
-            for node in nodes:
-                if "bboxes" in node.metadata:
-                    import json
-                    try:
-                        all_bboxes = json.loads(node.metadata["bboxes"])
-                        node_text_lower = node.get_content().lower()
-                        
-                        # Assign only boxes whose text snippet appears in this chunk
-                        assigned_bboxes = [
-                            b for b in all_bboxes
-                            if b.get("text_snippet", "").lower() in node_text_lower
-                        ]
-                        
-                        node.metadata["bboxes"] = json.dumps(assigned_bboxes)
-                    except Exception as e:
-                        logger.warning(f"Bbox assignment failed for node: {e}")
+            other_docs = [
+                d for d in documents
+                if d.metadata.get("file_type") != "pdf"
+            ]
+
             
+            if other_docs:
+                semantic_splitter = SentenceSplitter(
+                    chunk_size=self.config.CHUNK_SIZE,
+                    chunk_overlap=self.config.CHUNK_OVERLAP,
+                )
+                
+                logger.info("Splitting documents and assigning bounding boxes to chunks...")
+                split_nodes = await asyncio.to_thread(semantic_splitter.get_nodes_from_documents, other_docs)
+                nodes.extend(split_nodes)   
+
             BaseRAGPipeline.index = VectorStoreIndex(
                 nodes,
                 storage_context=storage_context,
