@@ -4,15 +4,16 @@ from app.services.code_execution.base_handler_factory import BaseFileHandler
 import os
 
 class ToolExecutor:
-    def __init__(self, web_search_provider=None, rag_pipeline=None, http_client=None):
+    def __init__(self, web_search_provider=None, rag_pipeline=None, http_client=None, research_provider=None):
         from app.services.web.web_search_factory import WebSearchProviderFactory
         from app.services.code_execution.execution_service import CodeExecutionService
         from app.services.rag_service.rag_execution_service import RAGExecutionService
-
+        from app.services.scholar_research.factory import ResearchProviderFactory
         # Use injected provider or fallback to factory (for backwards compatibility)
         self.web_search_service = web_search_provider or WebSearchProviderFactory.get_provider(http_client=http_client)
         self.code_executor = CodeExecutionService()
         self.rag_service = RAGExecutionService(pipeline=rag_pipeline)
+        self.research_service = research_provider or ResearchProviderFactory.get_provider()
 
     async def execute(self, function_name, args_str, session_id=None, store=None):
         """Dynamic tool dispatcher."""
@@ -27,16 +28,8 @@ class ToolExecutor:
                 "ListFiles": self._execute_list_files, 
                 "GenerateCode": self._execute_generate_code,
                 "ExecuteCode": self._execute_code,
-                # snake_case mapping
-                "web_search": self._execute_web_search,
-                "web_fetch": self._execute_web_fetch,
-                "web_research": self._execute_web_research,
-                "analyze_data": self._execute_analyze_data,
-                "get_info": self._execute_get_info,
-                "extract_metadata": self._execute_extract_metadata,
-                "list_files": self._execute_list_files,
-                "generate_code": self._execute_generate_code,
-                "execute_code": self._execute_code,
+                "FetchResearch": self._fetch_research, 
+
             }
 
             args = json.loads(args_str) if args_str.strip() else {}
@@ -180,3 +173,17 @@ class ToolExecutor:
         }
         result_state = await self.code_executor.analysis_graph.execute_code_node(temp_state)
         return json.dumps(result_state.get("execution_result", {}), indent=2)
+    
+    async def _fetch_research(self, args, ctx):
+        """Fetch research using the web research tool as a placeholder."""
+        query = args.get("query", "")
+        count = args.get("count")    
+        publication_year = args.get("publication_year")
+        is_oa = args.get("is_oa")
+        has_pdf = args.get("has_pdf")
+        
+        # For demonstration, we reuse the web research method. In a real implementation, this would call a dedicated research service.
+        research_results = await self.research_service.semantic_scholar_search(query, count=count, publication_year=publication_year, is_oa=is_oa, has_pdf=has_pdf)
+        
+        logger.info(f"FetchResearch results received: {research_results}")
+        return research_results
