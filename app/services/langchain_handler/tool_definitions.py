@@ -66,6 +66,46 @@ class ExecuteCode(BaseModel):
     """Run Python code in the sandbox and return the result/plots."""
     code: str = Field(description="The Python code to execute.")
 
+class FetchResearch(BaseModel):
+    """
+    OpenAlex keyword search API for finding research papers.
+    This tool is for retrieving academic papers based on keyword queries. It returns structured metadata about relevant papers, title, authors, year, DOI, is_open_access, pdf_url. Use this when the user needs to find research literature on a specific topic or question.
+
+    SEARCH CAPABILITIES:
+    - Simple keywords: "machine learning drug discovery"
+    - Boolean operators (MUST BE UPPERCASE): AND, OR, NOT
+    Example: '("machine learning" OR AI) AND "drug discovery" NOT review'
+    - Exact phrases: Use double quotes "deep learning"
+    - Grouping: Use parentheses to control logic (term1 AND term2) OR term3
+    - Default: Words without operators are treated as AND
+    
+    USAGE EXAMPLES:
+    query='machine learning AND "drug discovery"'  # Both terms required
+    query='(AI OR "machine learning") AND medicine NOT review'  # Complex boolean
+    query='"deep learning" AND cancer'  # Exact phrase + keyword
+
+    NOT SUPPORTED:
+    - Wildcards (*, ?)
+    - Fuzzy matching (~)
+    - Semantic/meaning-based search (use keyword matching only)
+    """
+    
+    query: str = Field(description="The user's research query to find relevant academic papers. This should be a natural language question or topic (e.g., 'What are the latest advancements in CRISPR gene editing?').")
+    count: int = Field(default=25, description="The number of research papers to return. Default is 25.")
+    publication_year: Optional[str] = Field(
+        default=">1950",
+        description="Filter by year (e.g., '2023', '>2020', or '2020-2023'). Default is '>1950'."
+    )
+    is_oa: Optional[bool] = Field(
+        default=True,
+        description="Set to true to return only Open Access works. Default is True."
+    )
+    has_pdf: Optional[bool] = Field(
+        default=True,
+        description="Set to true to ensure the paper has a downloadable PDF. Default is True."
+    )
+
+
 def get_tool_schemas():
     return [
         AnalyzeData,
@@ -76,6 +116,7 @@ def get_tool_schemas():
         ListFiles,
         WebFetch,
         WebResearch,
-        WebSearch
+        WebSearch,
+        FetchResearch,
     ]
 

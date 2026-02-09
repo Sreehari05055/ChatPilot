@@ -4,6 +4,7 @@ from app import logger
 from app.core.config import Config
 import json
 
+
 class BaseRAGPipeline(ABC):
     """
     Abstract base class for RAG pipelines.
@@ -135,7 +136,7 @@ class BaseRAGPipeline(ABC):
             # - FlagEmbedding: can be negative
             if max_score > 0:
                 # Positive scores: use 10% of max with 0.01 floor
-                threshold = max(max_score * 0.1, 0.01)
+                threshold = max(max_score * 0.2, 0.01)
             else:
                 threshold = max(max_score * 1.8, -10)
             
@@ -200,6 +201,8 @@ class BaseRAGPipeline(ABC):
             from llama_index.core.node_parser import SemanticSplitterNodeParser
             from app.services.parser import FileDataProvider
             from llama_index.core.node_parser import SentenceSplitter
+            from app.services.rag_service.chunking_service import ChunkingService
+
             nodes = []
             logger.info("Starting full RAG index rebuild...")
             
@@ -220,6 +223,7 @@ class BaseRAGPipeline(ABC):
 
             raw_documents = await asyncio.to_thread(get_docs_sync)
             documents: List[Document] = []
+            pdf_docs = []
             
             for data in raw_documents:
                 metadata = data.get("metadata", {}).copy()
@@ -227,41 +231,63 @@ class BaseRAGPipeline(ABC):
                     if isinstance(value, (list, dict)):
                         metadata[key] = json.dumps(value)
                 
-                doc = Document(
-                    text=data.get("content", ""), 
-                    id_=data.get("id"), 
-                    metadata=metadata,
-                    excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
-                    excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
-                )
-                documents.append(doc)
+                if "page_data" in data:
+                    pdf_docs.append({
+                        "id": data.get("id"),
+                        "title": data.get("title"),
+                        "page_data": data.get("page_data", {}),
+                        "metadata": metadata,
 
-            if not documents:
+                    })
+                else:
+                    doc = Document(
+                        text=data["content"], 
+                        id_=data.get("id"), 
+                        metadata=metadata,
+                        excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
+                        excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
+                    )
+                    documents.append(doc)
+
+            if not documents and not pdf_docs:
                 logger.warning("No documents found in source_files/. Index will be empty.")
                 BaseRAGPipeline.index = None
                 return
             
-            # Separate PDF docs (already chunked) from others (need chunking)
-            from llama_index.core.schema import TextNode
-            pdf_docs = [d for d in documents if d.metadata.get("file_type") == "pdf"]
+            if pdf_docs:
+                from llama_index.core.schema import TextNode
+                chunking_service = ChunkingService()
+
+                for doc in pdf_docs:
+                    chunks = chunking_service.chunk_pdf_elements(
+                        pdf_page_data=doc["page_data"],
+                        doc_id=doc["id"],
+                        doc_title=doc["title"]
+                    )
+                    for idx, chunk  in enumerate(chunks):
+                        chunk_metadata = {
+                            **doc["metadata"],
+                            **chunk["metadata"]
+                        }
             
-            # Convert PDF Documents to TextNodes since they're already chunked
-            for doc in pdf_docs:
-                node = TextNode(
-                    text=doc.text,
-                    id_=doc.id_,
-                    metadata=doc.metadata,
-                    excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
-                    excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
-                )
-                nodes.append(node)
+                        # Convert any remaining lists/dicts to JSON strings
+                        for key, value in chunk_metadata.items():
+                            if isinstance(value, (list, dict)):
+                                chunk_metadata[key] = json.dumps(value)
+                                    
+                        node = TextNode(
+                            text=chunk["content"],
+                            id_=f"{doc.get('id', '')}_c{idx}",
+                            metadata=chunk_metadata,
+                            excluded_embed_metadata_keys=["bboxes", "pages", "file_type", "title"],
+                            excluded_llm_metadata_keys=["bboxes", "pages", "file_type"],
+                        )
+                        nodes.append(node)
             
             other_docs = [
                 d for d in documents
                 if d.metadata.get("file_type") != "pdf"
             ]
-
-            
             if other_docs:
                 semantic_splitter = SentenceSplitter(
                     chunk_size=self.config.CHUNK_SIZE,

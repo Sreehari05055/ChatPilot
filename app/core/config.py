@@ -60,6 +60,7 @@ class Config:
     CSE_ID = os.getenv("CSE_ID")
     TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
     COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+    OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY")
     DATA_DIR = os.getenv("DATA_DIR", "source_files/")
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
 
