@@ -13,34 +13,43 @@ class FileDataProvider(BaseDataProvider):
         for filename in os.listdir(self.data_dir):
             filepath = os.path.join(self.data_dir, filename)
             title = os.path.splitext(filename)[0]
-            doc_id = filename  
+            doc_id = os.path.basename(filepath)
+
             try:
                 parser = ParserFactory.get_parser(filepath)
-                result = parser.extract(filepath)
+                raw_data = parser.extract(filepath)
 
-                if not result:
+                if not raw_data:
                     continue
                 
-                # Handle both single dict and list of segments (for multi-page PDFs)
-                if isinstance(result, dict):
-                    result = [result]
-                
-                for idx, segment in enumerate(result):
-                    content = segment.get("content", "")
-                    metadata = segment.get("metadata", {})
-                    
-                    if not content or not content.strip():
-                        continue
-                    
-                    # Generate unique ID for each chunk
-                    segment_id = f"{doc_id}_c{idx}"
-                    
+                if isinstance(raw_data, dict) and "page_data" in raw_data:
                     yield {
-                        "id": segment_id,
-                        "title": metadata.get("title", title),
-                        "content": content,
-                        "metadata": metadata
+                        "id": doc_id,
+                        "title": raw_data.get("title", title),
+                        "page_data": raw_data.get("page_data", {}),
+                        "metadata": raw_data.get("metadata", {})
                     }
+                    
+                else:
+                    if not isinstance(raw_data, list):
+                        raw_data = [raw_data]
+                
+                    for idx, segment in enumerate(raw_data):
+                        content = segment.get("content", "")
+                        metadata = segment.get("metadata", {})
+                        
+                        if not content or not content.strip():
+                            continue
+                        
+                        # Generate unique ID for each chunk using the absolute doc id
+                        segment_id = f"{doc_id}_c{idx}"
+
+                        yield {
+                            "id": segment_id,
+                            "title": metadata.get("title", title),
+                            "content": content,
+                            "metadata": metadata
+                        }
 
             except ValueError:
                 continue  
