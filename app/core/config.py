@@ -63,7 +63,7 @@ class Config:
     OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY")
     DATA_DIR = os.getenv("DATA_DIR", "source_files/")
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
-
+    STORAGE_DIR = os.getenv("STORAGE_DIR", "conversations/") 
     try:
         system_prompt = get_system_prompt(ToneStyle.PROFESSIONAL)
         MODEL_NAME = os.getenv("MODEL_NAME")

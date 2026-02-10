@@ -41,6 +41,7 @@ pip install -r requirements.txt
 - OR **Google Custom Search**: 
   - API key from [Google Cloud Console](https://console.cloud.google.com/)
   - CSE ID from [cse.google.com](https://cse.google.com)
+- **OpenAlex**: Get an API key at [OpenAlex.org](https://docs.openalex.org/how-to-use-the-api/api-overview) and add `OPENALEX_API_KEY=your_openalex_api_key` to your `.env`. Restart the server after updating `.env`.
 
 ### 4. Set up environment variables
 
@@ -53,8 +54,8 @@ LLM_API_KEY=your_openai_or_anthropic_key
 
 # RAG Provider (optional - defaults to local HuggingFace if not set)
 # Leave COHERE_API_KEY empty to use local BGE embeddings
-COHERE_API_KEY=  # Add your key here only if you want to use Cohere embeddings
-
+COHERE_API_KEY=  # Add your API key here only if you want to use Cohere embeddings
+OPENALEX_API_KEY=your_openalex_api_key # Add your OpenAlex API key here if you want to use scholar research
 # Optional - Web Search (choose one)
 TAVILY_API_KEY=your_tavily_api_key  # Recommended for accuracy
 
