@@ -1,6 +1,9 @@
 # ChatPilot: Intelligent Agentic RAG & Autonomous Research Engine
 
+**Demo video**: [Watch demo video](https://github.com/user-attachments/assets/12bcfb73-c5fa-46f7-8f48-2d235b98d3c8)
+
 ChatPilot is a tool-augmented **Agentic Copilot** that goes beyond simple chat. It utilizes a single AI agent to interact with your local files, conduct deep web research, and perform autonomous data analysis through Python code execution.
+
 **Demo Frontend:** [ChatPilot Frontend](https://github.com/Sreehari05055/Demo-frontend)
 
 ---
