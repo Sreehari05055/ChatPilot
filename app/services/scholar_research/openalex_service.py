@@ -6,8 +6,9 @@ import requests
 from app import logger
 
 class OpenAlexResearchService(BaseResearchService):
-    def __init__(self):
+    def __init__(self, http_client=None):
         self.api_key = Config.OPENALEX_API_KEY
+        self.http_client = http_client
         self.works_url = "https://api.openalex.org/works" 
 
 
@@ -20,8 +21,12 @@ class OpenAlexResearchService(BaseResearchService):
         headers = {
             "User-Agent": "ResearchApp/1.0"  
         }
-        async with httpx.AsyncClient() as client:
+        if self.http_client is not None:
+            client = self.http_client
             response = await client.get(self.works_url, params=params, headers=headers)
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.works_url, params=params, headers=headers)
         
         results = response.json()["results"] if response.status_code == 200 else []
         
@@ -52,10 +57,8 @@ class OpenAlexResearchService(BaseResearchService):
         return '\n\n'.join([f"Title: {r['title']}\nAuthors: {', '.join(r['authors'])}\nYear: {r['publication_year']}\nDOI: {r['doi']}\nOpen Access: {r['is_open_access']}\nPDF URL: {r['pdf_url']}\nLanding Page: {r['landing_page_url']}" for r in formatted_results])
 
     async def _research_articles(self, query, MAX_RESULTS=Config.WEB_SEARCH_NUM_RESULTS) -> str:
-        # Implement the logic to call OpenAlex API and retrieve research articles based on the query
-        # Use self.api_key for authentication if required by the API
-        # Process the API response and return the relevant information as a string
         return f"Research results for query: '{query}' using OpenAlex API (this is a placeholder response)."
+    
     async def _retrieve_articles(self, query, **kwargs) -> str:
         return f"Article retrieval for query: '{query}' using OpenAlex API (this is a placeholder response)."
     
