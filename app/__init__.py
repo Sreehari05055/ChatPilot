@@ -31,6 +31,7 @@ from app.services.rag_service import RAGExecutionService
 from app.services.rag_service.rag_factory import RAGProviderFactory
 from app.services.web.web_search_factory import WebSearchProviderFactory
 from app.services.state_manager import FileHistoryStore
+from app.services.scholar_research.factory import ResearchProviderFactory
 from starlette.middleware.sessions import SessionMiddleware
 from app.services.code_execution.execution_service import CodeExecutionService
 from app.services.langchain_handler.tool_executor import ToolExecutor
@@ -41,13 +42,15 @@ if not os.path.exists(Config.DATA_DIR):
     os.makedirs(Config.DATA_DIR, exist_ok=True)
 if not os.path.exists(Config.INDEX_DIR):
     os.makedirs(Config.INDEX_DIR, exist_ok=True)
+if not os.path.exists(Config.STORAGE_DIR):
+    os.makedirs(Config.STORAGE_DIR, exist_ok=True)
 
 # Initialize RAG pipeline provider once at startup
 rag_pipeline = RAGProviderFactory.get_provider()
 
 def create_app() -> FastAPI:
 
-    history_store = FileHistoryStore(storage_dir="conversations", rag_dir=Config.DATA_DIR)
+    history_store = FileHistoryStore(storage_dir=Config.STORAGE_DIR, rag_dir=Config.DATA_DIR)
 
     if not Config.LLM_API_KEY:  
         logger.error("LLM_API_KEY environment variable is not set")
@@ -58,6 +61,7 @@ def create_app() -> FastAPI:
     
     # Initialize web search provider once per app instance
     web_search_provider = WebSearchProviderFactory.get_provider(http_client=http_client)
+    research_provider = ResearchProviderFactory.get_provider(http_client=http_client)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -87,7 +91,7 @@ def create_app() -> FastAPI:
     from app.routes.chatbot_routes import init_chatbot_routes
     from app.routes.ingest_routes import init_ingest_routes
     init_ingest_routes(app, history_store)
-    init_chatbot_routes(app, Config.system_prompt, history_store, http_client, web_search_provider, rag_pipeline)
+    init_chatbot_routes(app, Config.system_prompt, history_store, http_client, web_search_provider, rag_pipeline, research_provider)
 
 
     return app
