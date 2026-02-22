@@ -106,8 +106,31 @@ class FetchResearch(BaseModel):
     )
 
 
+class DeepScholarResearchAndHighlight(BaseModel):
+    """
+    Advanced research tool that combines semantic search with document retrieval and response generation. Use this for complex research questions that require not just finding papers, but also extracting and summarizing key insights from them.
+
+    This tool performs the following steps:
+    1. Semantic Scholar Search: Uses the query to find relevant papers based on meaning, not just keywords.
+    2. Article Retrieval: Fetches the full text of the most relevant papers.
+    3. Article Indexing: Processes and indexes the retrieved articles for efficient access.
+    4. Response Generation: Synthesizes a comprehensive answer to the user's query based on the indexed articles, highlighting key findings and insights.
+
+    This is ideal for in-depth research questions where the user needs a synthesized answer derived from multiple academic sources.
+    
+    Example usage:
+    
+    """
+    
+    original_query: str = Field(description="The complex research question or topic that requires an in-depth answer synthesized from multiple academic papers.")
+
+class InternalThought(BaseModel):
+    """CONDITIONAL STEP. Use this tool to log your internal reasoning, planning, and risk assessments before taking any other action. Required for complex queries and before tool calls, but skip it for simple/direct greetings and basic questions."""
+    reasoning: str = Field(description="Your detailed internal thought process, hypothesis, and plan of action.")
+
 def get_tool_schemas():
     return [
+        InternalThought,
         AnalyzeData,
         ExecuteCode,
         ExtractMetadata,
@@ -118,5 +141,6 @@ def get_tool_schemas():
         WebResearch,
         WebSearch,
         FetchResearch,
+        DeepScholarResearchAndHighlight,
     ]
 
