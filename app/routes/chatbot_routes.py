@@ -22,7 +22,7 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return PlainTextResponse("Rate limit exceeded", status_code=HTTP_429_TOO_MANY_REQUESTS)
 
 
-def init_chatbot_routes(app, system_prompt, history_store, http_client, web_search_provider, rag_pipeline):
+def init_chatbot_routes(app, system_prompt, history_store, http_client, web_search_provider, rag_pipeline, research_provider):
 
     @chatbot_bp.post('/api/chat', response_class=StreamingResponse)
     @limiter.limit("10/minute")
@@ -77,7 +77,8 @@ def init_chatbot_routes(app, system_prompt, history_store, http_client, web_sear
                 session_id=session_id, 
                 http_client=http_client,
                 web_search_provider=web_search_provider,
-                rag_pipeline=rag_pipeline
+                rag_pipeline=rag_pipeline,
+                research_provider=research_provider
             )
 
             async def event_stream():
