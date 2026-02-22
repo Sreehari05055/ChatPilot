@@ -65,7 +65,7 @@ class Config:
     INDEX_DIR = os.getenv("INDEX_DIR", "index_storage/")
     STORAGE_DIR = os.getenv("STORAGE_DIR", "conversations/") 
     try:
-        system_prompt = get_system_prompt(ToneStyle.PROFESSIONAL)
+        system_prompt = get_system_prompt()
         MODEL_NAME = os.getenv("MODEL_NAME")
 
         # Model settings (from AdminConfig)
