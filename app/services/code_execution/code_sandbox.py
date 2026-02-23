@@ -30,6 +30,7 @@ class CodeSandboxExecutor:
             self.sandbox_pids_limit = getattr(Config, 'SANDBOX_PIDS_LIMIT', 64)
             self.sandbox_shm_size = getattr(Config, 'SANDBOX_SHM_SIZE', '64m')
             self.sandbox_auto_remove = getattr(Config, 'SANDBOX_AUTO_REMOVE', False)
+            self.sandbox_timeout = getattr(Config, 'SANDBOX_TIMEOUT', 1800) # Default 30 min
         except Exception:
             # Fallbacks in case Config is missing attributes
             self.sandbox_nano_cpus = 500000000
@@ -39,6 +40,7 @@ class CodeSandboxExecutor:
             self.sandbox_pids_limit = 64
             self.sandbox_shm_size = '64m'
             self.sandbox_auto_remove = False
+            self.sandbox_timeout = 1800
 
         self._initialize()
     
@@ -89,7 +91,7 @@ class CodeSandboxExecutor:
                 image=self.image_name,
                 name=container_name,
                 detach=True,
-                command="sleep infinity",
+                command=f"sleep {self.sandbox_timeout}",
                 user="sandboxuser",
                 network_mode="none",
                 volumes=volumes,

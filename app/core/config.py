@@ -1,9 +1,8 @@
 from app import logger
 from dotenv import load_dotenv
 import os
-import json
 from dataclasses import dataclass, field
-from app.prompts.prompts import ToneStyle, get_system_prompt
+from app.prompts.prompts import get_system_prompt
 from app.core.hardware import HardwareDetector
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -102,6 +101,7 @@ class Config:
         SANDBOX_PIDS_LIMIT = int(os.getenv("SANDBOX_PIDS_LIMIT", "64"))
         SANDBOX_SHM_SIZE = os.getenv("SANDBOX_SHM_SIZE", "64m")
         SANDBOX_AUTO_REMOVE = os.getenv("SANDBOX_AUTO_REMOVE", "False").lower() in ("1", "true", "yes")
+        SANDBOX_TIMEOUT = int(os.getenv("SANDBOX_TIMEOUT", "1800")) # 30 mins
 
     except Exception as e:
         logger.error(f"Error in configuration: {e}")
