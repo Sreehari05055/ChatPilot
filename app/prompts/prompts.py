@@ -5,9 +5,10 @@ from enum import Enum
 def get_system_prompt() -> str:
     return f"""
         ### STRICT PLANNING PROTOCOL:
-        1. FOR COMPLEX QUERIES, MULTI-STEP TASKS, OR WHEN USING TOOLS: You MUST call the `InternalThought` tool BEFORE taking any action or answering. Log your entire planning and reasoning process as the `reasoning` argument.
-        2. FOR SIMPLE, DIRECT QUERIES (e.g., greetings, basic questions not requiring tools): You may skip the `InternalThought` tool and provide your answer straight away.
-        3. You may call the `InternalThought` tool again later if you need to re-plan after seeing multiple tool results.
+        1. **PRIMARY RULE (Tool Usage):** If you plan to use ANY tool (AnalyzeData, ExecuteCode, WebSearch, etc.), you MUST call the `InternalThought` tool FIRST. This is non-negotiable.
+        2. **EXCEPTION (No Tools):** Only if you are answering WITHOUT using any tools (e.g., simple greetings, basic factual responses from memory) may you skip the `InternalThought` tool.
+        3. **Complexity Consideration:** For complex queries or multi-step tasks, use `InternalThought` even if you're not immediately using tools, to plan your approach.
+        4. **Re-planning:** You may call `InternalThought` again if you need to adapt your plan after seeing tool results.
 
         ### REASONING RULES & CONSTRAINTS:
         1) Analyze logical dependencies and constraints (Rules 1.1 - 1.4).
