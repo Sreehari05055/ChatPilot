@@ -12,7 +12,7 @@ import os
 config = Config()
 
 class ChatbotService:
-    def __init__(self, system_prompt: str, store, session_id: str, http_client, web_search_provider=None, rag_pipeline=None):
+    def __init__(self, system_prompt: str, store, session_id: str, http_client, web_search_provider=None, rag_pipeline=None, research_provider=None):
         from app.services.langchain_handler.tool_executor import ToolExecutor
         self.system_prompt = system_prompt
         self.store = store
@@ -20,6 +20,7 @@ class ChatbotService:
         self.http_client = http_client
         self.tool_executor = ToolExecutor(
             web_search_provider=web_search_provider,
+            research_provider=research_provider,
             rag_pipeline=rag_pipeline,
             http_client=http_client
         )
@@ -98,16 +99,36 @@ class ChatbotService:
                 }
                 
                 if accumulated_msg.tool_calls:
-                    tool_calls_data = []
+                    tool_calls_data_to_store = []
+                    context_tool_calls = []
                     tasks = []
                     task_ids = []
 
                     for tc in accumulated_msg.tool_calls:
                         tool_name = tc["name"]
-                        tool_args = tc["args"]
+                        tool_args = tc.get("args", {})
                         tool_id = tc["id"]
+                        
+                        # Add to the internal context regardless so LangChain can resolve it
+                        context_tool_calls.append(tc)
 
-                        tool_calls_data.append({
+                        if tool_name == "InternalThought":
+                            thought_text = tool_args.get("reasoning", "")
+                            if thought_text:
+                                yield f"data: {json.dumps({'thought': thought_text}, ensure_ascii=False)}\n\n"
+                            
+                            # Let ToolExecutor handle it so logs/dispatch are centralized
+                            tasks.append(self.tool_executor.execute(
+                                tool_name, 
+                                json.dumps(tool_args), 
+                                self.session_id,
+                                self.store
+                            ))
+                            task_ids.append({"tool_id": tool_id, "tool_name": tool_name, "tool_args": tool_args, "is_thought": True})
+                            continue
+
+                        # Only add non-thoughts to the persistent store
+                        tool_calls_data_to_store.append({
                             "id": tool_id,
                             "type": "function",
                             "function": {
@@ -121,12 +142,21 @@ class ChatbotService:
                             self.session_id,
                             self.store
                         ))
-                        task_ids.append({"tool_id": tool_id, "tool_name": tool_name, "tool_args": tool_args})
+                        task_ids.append({"tool_id": tool_id, "tool_name": tool_name, "tool_args": tool_args, "is_thought": False})
                     
-                    ai_msg_dict["tool_calls"] = tool_calls_data
-                    
-                    await self.store.add_message(self.session_id, ai_msg_dict)
+                    # Ensure the AI message goes to the local context exactly as generated
                     lc_messages.append(accumulated_msg)
+
+                    # Determine if there's anything worth storing permanently for this Assistant turn
+                    if accumulated_msg.content or tool_calls_data_to_store:
+                        ai_msg_dict_to_store = {
+                            "role": "assistant",
+                            "content": accumulated_msg.content,
+                        }
+                        if tool_calls_data_to_store:
+                            ai_msg_dict_to_store["tool_calls"] = tool_calls_data_to_store
+                        
+                        await self.store.add_message(self.session_id, ai_msg_dict_to_store)
                     
                     # 3. Parallel Execution: Run all tools at once
                     logger.info(f"Invoking {len(tasks)} tools in parallel: {[m['tool_name'] for m in task_ids]}")
@@ -135,31 +165,35 @@ class ChatbotService:
                     for idx, tool_result in enumerate(tool_results):
                         tool_id = task_ids[idx]["tool_id"]
                         tool_name = task_ids[idx]["tool_name"]
+                        is_thought = task_ids[idx].get("is_thought", False)
                         
                         tool_result_content = ""
                         if isinstance(tool_result, Exception):
                             tool_result_content = f"Error executing tool {tool_name}: {str(tool_result)}"
                         elif isinstance(tool_result, dict) and "context_text" in tool_result:
-
                             tool_result_content = tool_result["context_text"]
                             sources = tool_result.get("sources", [])
                             yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
                         else:
                             tool_result_content = str(tool_result)
                         
-                        # Create Tool Message (LLM only sees the content)
-                        tool_msg_dict = {
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": tool_result_content
-                        }
-                        await self.store.add_message(self.session_id, tool_msg_dict)
+                        # Add ALL tool results to local context (so LangChain is happy)
                         lc_messages.append(ToolMessage(
                             tool_call_id=tool_id,
                             content=tool_result_content,
                             name=tool_name
                         ))
+
+                        # Only persist non-thought tool results to the database
+                        if not is_thought:
+                            tool_msg_dict = {
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": tool_result_content
+                            }
+                            await self.store.add_message(self.session_id, tool_msg_dict)
+
 
                     # Loop continues to get next response from LLM (using updated lc_messages)
                 else:

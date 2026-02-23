@@ -4,9 +4,9 @@ from app.services.scholar_research.openalex_service import OpenAlexResearchServi
 
 class ResearchProviderFactory:
     @staticmethod
-    def get_provider():
+    def get_provider(http_client=None):
 
         if getattr(Config, 'OPENALEX_API_KEY', None):
-            return OpenAlexResearchService()
+            return OpenAlexResearchService(http_client=http_client)
 
         return BaseResearchService()

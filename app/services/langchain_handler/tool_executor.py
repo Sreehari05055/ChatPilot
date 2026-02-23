@@ -13,12 +13,13 @@ class ToolExecutor:
         self.web_search_service = web_search_provider or WebSearchProviderFactory.get_provider(http_client=http_client)
         self.code_executor = CodeExecutionService()
         self.rag_service = RAGExecutionService(pipeline=rag_pipeline)
-        self.research_service = research_provider or ResearchProviderFactory.get_provider()
+        self.research_service = research_provider or ResearchProviderFactory.get_provider(http_client=http_client)
 
     async def execute(self, function_name, args_str, session_id=None, store=None):
         """Dynamic tool dispatcher."""
         try:
             dispatch_map = {
+                "InternalThought": self._execute_internal_thought,
                 "WebSearch": self._execute_web_search,
                 "WebFetch": self._execute_web_fetch,
                 "WebResearch": self._execute_web_research,
@@ -29,7 +30,6 @@ class ToolExecutor:
                 "GenerateCode": self._execute_generate_code,
                 "ExecuteCode": self._execute_code,
                 "FetchResearch": self._fetch_research, 
-
             }
 
             args = json.loads(args_str) if args_str.strip() else {}
@@ -52,6 +52,10 @@ class ToolExecutor:
             return f"Error executing {function_name}: {str(e)}"
 
     # --- Tool Implementation Wrappers ---
+
+    async def _execute_internal_thought(self, args, ctx):
+        """Acknowledges the reasoning was recorded."""
+        return "Thought recorded."
 
     async def _execute_web_search(self, args, ctx):
         query = args.pop("question")
@@ -183,7 +187,7 @@ class ToolExecutor:
         has_pdf = args.get("has_pdf")
         
         # For demonstration, we reuse the web research method. In a real implementation, this would call a dedicated research service.
-        research_results = await self.research_service.semantic_scholar_search(query, count=count, publication_year=publication_year, is_oa=is_oa, has_pdf=has_pdf)
+        research_results = await self.research_service.semantic_scholar_search(query=query, count=count, publication_year=publication_year, is_oa=is_oa, has_pdf=has_pdf)
         
         logger.info(f"FetchResearch results received: {research_results}")
         return research_results
