@@ -1,11 +1,35 @@
 from transformers import AutoTokenizer
 from app.core.config import Config
 from typing import List
+from app import logger
 
 class ChunkingService:
     def __init__(self):
-        self.tokenizer = AutoTokenizer.from_pretrained(Config.EMBEDDING_MODEL, model_max_length=int(1e30))
-        self.JOIN_TOKEN_COST = len(self.tokenizer.encode("\n\n", add_special_tokens=False))
+        try:
+            # Use tiktoken for OpenAI models to avoid HuggingFace Hub errors
+            if "text-embedding-3" in Config.EMBEDDING_MODEL.lower() or "openai" in Config.EMBEDDING_PROVIDER.lower():
+                import tiktoken
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+                self.token_mode = "tiktoken"
+            elif "cohere" in Config.EMBEDDING_PROVIDER.lower():
+                # Cohere uses API-based models; use gpt2 as a close-enough local proxy for chunking
+                logger.info("Cohere provider detected. Using 'gpt2' local proxy for token counting.")
+                self.token_mode = "transformers"
+                self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+            else:
+                self.token_mode = "transformers"
+                self.tokenizer = AutoTokenizer.from_pretrained(Config.EMBEDDING_MODEL, model_max_length=int(1e30))
+        except Exception as e:
+            logger.warning(f"Failed to load tokenizer for {Config.EMBEDDING_MODEL}: {e}. Falling back to default 'gpt2'.")
+            self.token_mode = "transformers"
+            self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+            
+        # Standardize joining cost
+        if self.token_mode == "tiktoken":
+            self.JOIN_TOKEN_COST = len(self.tokenizer.encode("\n\n"))
+        else:
+            self.JOIN_TOKEN_COST = len(self.tokenizer.encode("\n\n", add_special_tokens=False))
+            
         self.CHUNK_SIZE = Config.CHUNK_SIZE
 
 
@@ -92,7 +116,11 @@ class ChunkingService:
         
         sub_chunk = self._new_chunk()
         for sent in sentences:
-            sent_tokens = len(self.tokenizer.encode(sent, add_special_tokens=False))
+            if self.token_mode == "tiktoken":
+                sent_tokens = len(self.tokenizer.encode(sent))
+            else:
+                sent_tokens = len(self.tokenizer.encode(sent, add_special_tokens=False))
+            
             join_cost = self.JOIN_TOKEN_COST if sub_chunk["content"] else 0
             
             if sub_chunk["token_count"] + join_cost + sent_tokens > self.CHUNK_SIZE:

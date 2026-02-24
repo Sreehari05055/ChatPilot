@@ -19,7 +19,25 @@ class PDFExtractor(BaseParser):
         pipeline_options = PdfPipelineOptions()
         pipeline_options.do_ocr = True
         pipeline_options.do_table_structure = True
-        self.tokenizer = AutoTokenizer.from_pretrained(Config.EMBEDDING_MODEL, model_max_length=int(1e30))
+        
+        try:
+            if "text-embedding-3" in Config.EMBEDDING_MODEL.lower() or "openai" in Config.EMBEDDING_PROVIDER.lower():
+                import tiktoken
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+                self.token_mode = "tiktoken"
+            elif "cohere" in Config.EMBEDDING_PROVIDER.lower():
+                # Use gpt2 proxy for Cohere to avoid HF errors
+                logger.info("Cohere provider detected for PDF extraction. Using 'gpt2' local proxy.")
+                self.token_mode = "transformers"
+                self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+            else:
+                self.token_mode = "transformers"
+                self.tokenizer = AutoTokenizer.from_pretrained(Config.EMBEDDING_MODEL, model_max_length=int(1e30))
+        except Exception as e:
+            logger.warning(f"PDFExtractor failed to load tokenizer for {Config.EMBEDDING_MODEL}: {e}. Falling back to 'gpt2'.")
+            self.token_mode = "transformers"
+            self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+
         hw_config = HardwareDetector.get_runtime_config()
         pipeline_options.accelerator_options = hw_config["accelerator_options"]
         
@@ -81,7 +99,10 @@ class PDFExtractor(BaseParser):
 
                 
                 element_md = self.clean_for_embeddings(element_md)
-                element_token_count = len(self.tokenizer.encode(element_md, add_special_tokens=False))
+                if self.token_mode == "tiktoken":
+                    element_token_count = len(self.tokenizer.encode(element_md))
+                else:
+                    element_token_count = len(self.tokenizer.encode(element_md, add_special_tokens=False))
                 
                 if not element_md or element_token_count == 0:
                     continue

@@ -54,8 +54,6 @@ def create_app() -> FastAPI:
 
     if not Config.LLM_API_KEY:  
         logger.error("LLM_API_KEY environment variable is not set")
-    if not Config.COHERE_API_KEY:
-        logger.warning("COHERE_API_KEY environment variable is not set - using local embeddings")  
 
     http_client = httpx.AsyncClient()
     
