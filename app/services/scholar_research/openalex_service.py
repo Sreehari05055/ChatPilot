@@ -44,7 +44,11 @@ class OpenAlexResearchService(BaseResearchService):
             elif item.get("primary_location", {}).get("pdf_url"):
                 pdf_url = item["primary_location"]["pdf_url"]
 
+            # Extract work ID from full OpenAlex ID (e.g., https://openalex.org/W2741809807 -> W2741809807)
+            work_id = item.get("id", "").split("/")[-1]
+
             formatted_results.append({
+                "id": work_id,
                 "title": item.get("title"),
                 "authors": [author['author']['display_name'] for author in item.get("authorships", [])],
                 "publication_year": item.get("publication_year"),
@@ -54,16 +58,10 @@ class OpenAlexResearchService(BaseResearchService):
                 "landing_page_url": item.get("primary_location", {}).get("landing_page_url")
             })
 
-        return '\n\n'.join([f"Title: {r['title']}\nAuthors: {', '.join(r['authors'])}\nYear: {r['publication_year']}\nDOI: {r['doi']}\nOpen Access: {r['is_open_access']}\nPDF URL: {r['pdf_url']}\nLanding Page: {r['landing_page_url']}" for r in formatted_results])
+        return formatted_results
 
-    async def _research_articles(self, query, MAX_RESULTS=Config.WEB_SEARCH_NUM_RESULTS) -> str:
-        return f"Research results for query: '{query}' using OpenAlex API (this is a placeholder response)."
-    
-    async def _retrieve_articles(self, query, **kwargs) -> str:
-        return f"Article retrieval for query: '{query}' using OpenAlex API (this is a placeholder response)."
-    
-    async def _index_articles(self, articles, **kwargs) -> str:
-        return f"Article indexing for {len(articles)} articles using OpenAlex API (this is a placeholder response)."
-    
-    async def _respond_with_articles(self, query, **kwargs) -> str:
-        return f"Responding with articles for query: '{query}' using OpenAlex API (this is a placeholder response)."
+    async def get_formatted_search_results(self, query, **kwargs) -> str:
+        results = await self.semantic_scholar_search(query, **kwargs)
+        if isinstance(results, str):
+            return results
+        return '\n\n'.join([f"Title: {r['title']}\nAuthors: {', '.join(r['authors'])}\nYear: {r['publication_year']}\nDOI: {r['doi']}\nOpen Access: {r['is_open_access']}\nPDF URL: {r['pdf_url']}\nLanding Page: {r['landing_page_url']}" for r in results])

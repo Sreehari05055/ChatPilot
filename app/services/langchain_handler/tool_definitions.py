@@ -117,12 +117,20 @@ class DeepScholarResearchAndHighlight(BaseModel):
     4. Response Generation: Synthesizes a comprehensive answer to the user's query based on the indexed articles, highlighting key findings and insights.
 
     This is ideal for in-depth research questions where the user needs a synthesized answer derived from multiple academic sources.
-    
+
     Example usage:
-    
+    User asks: "Get me some relevant research articles on the role of gut microbiome in neurodegenerative diseases and give me the relevant parts from those papers that helps my research on Parkinson's."
+    search_query: '"gut microbiome" AND "neurodegenerative diseases" AND Parkinson's'
+    original_query: "The role of gut microbiome in neurodegenerative diseases specifically focused on Parkinson's research."
+    sub_queries: ["gut-brain axis Parkinson's disease research", "microbiome composition neurodegeneration", "therapeutic potential of probiotics in Parkinson's"]
     """
     
     original_query: str = Field(description="The complex research question or topic that requires an in-depth answer synthesized from multiple academic papers.")
+    search_query: str = Field(description="A keyword-optimized search query for the academic database. Use Boolean operators (AND, OR, NOT) and exact phrases in quotes as defined in FetchResearch to find relevant papers.")
+    sub_queries: List[str] = Field(description=(        
+        "Semantically rewritten search queries derived from the original query and relevant context from the conversation history. "
+        "Each item should be a full natural-language query optimized for vector retrieval, "
+        "DO NOT return single words or keyword lists."))
 
 class InternalThought(BaseModel):
     """CONDITIONAL STEP. Use this tool to log your internal reasoning, planning, and risk assessments before taking any other action. Required for complex queries and before tool calls, but skip it for simple/direct greetings and basic questions."""
