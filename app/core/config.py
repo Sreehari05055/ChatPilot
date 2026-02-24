@@ -73,14 +73,55 @@ class Config:
         TOP_P = admin.model.top_p
         STREAM = True
 
+        # RAG Provider Selection
+        EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER")
+        if EMBEDDING_PROVIDER:
+            EMBEDDING_PROVIDER = EMBEDDING_PROVIDER.lower().strip()
+        
+        if not EMBEDDING_PROVIDER:
+            if os.getenv("COHERE_API_KEY"):
+                EMBEDDING_PROVIDER = "cohere"
+            elif os.getenv("OPENAI_API_KEY") or LLM_PROVIDER == "openai":
+                EMBEDDING_PROVIDER = "openai"
+            else:
+                EMBEDDING_PROVIDER = "local"
+
+        RERANKER_PROVIDER = os.getenv("RERANKER_PROVIDER")
+        if RERANKER_PROVIDER:
+            RERANKER_PROVIDER = RERANKER_PROVIDER.lower().strip()
+            
+        if not RERANKER_PROVIDER:
+            if os.getenv("COHERE_API_KEY"):
+                RERANKER_PROVIDER = "cohere"
+            else:
+                RERANKER_PROVIDER = "local"
+
         # RAG settings (from AdminConfig)
         CHUNK_SIZE = admin.rag.chunk_size
         CHUNK_OVERLAP = admin.rag.chunk_overlap
         TOP_K = admin.rag.top_k
         TOP_N = admin.rag.top_n
         
-        RERANKING_MODEL = os.getenv("RERANKING_MODEL", "BAAI/bge-reranker-v2-m3")
-        EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+        # Provider-to-Model Mappings
+        EMBED_DEFAULTS = {
+            "openai": "text-embedding-3-small",
+            "cohere": "embed-english-v3.0",
+            "local": "BAAI/bge-small-en-v1.5"
+        }
+        RERANK_DEFAULTS = {
+            "cohere": "rerank-english-v3.0",
+            "local": "BAAI/bge-reranker-v2-m3"
+        }
+
+        # 1. Resolve Embedding Model
+        EMBEDDING_MODEL = EMBED_DEFAULTS.get(EMBEDDING_PROVIDER, EMBED_DEFAULTS["local"])
+
+        # 2. Resolve Reranking Model
+        # Force local if provider is anything other than cohere
+        if RERANKER_PROVIDER not in RERANK_DEFAULTS:
+            RERANKER_PROVIDER = "local"
+            
+        RERANKING_MODEL = RERANK_DEFAULTS.get(RERANKER_PROVIDER)
 
         # Conversation settings
         MAX_CONVERSATION_TURNS = admin.max_conversation_turns
