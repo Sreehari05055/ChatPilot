@@ -2,16 +2,20 @@
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - pip (Python package manager)
 - Docker (required for secure code execution sandbox)
-- LLM API key - OpenAI or Anthropic (required)
-- **RAG Provider** (choose one):
-  - **Local**: No API key needed - uses HuggingFace embeddings (BAAI BGE-small-en-v1.5) + BGE reranker (fully offline)
-  - **Cloud**: Cohere API key (1024D embeddings with built-in reranking)
-- Web Search API key (optional):
-  - **Tavily API key** (recommended for accuracy), OR
-  - Google Cloud Custom Search API key + CSE ID
+- **LLM API Key** - One of the following is required:
+  - OpenAI (GPT-4o)
+  - Anthropic (Claude 3.5 Sonnet)
+  - DeepSeek (DeepSeek-V3/R1)
+  - Google (Gemini-1.5 Pro/Flash)
+- **RAG Configuration** (Embedding & Reranking):
+  - **Local (BAAI)**: Fast, offline, no API key needed
+  - **Cloud (OpenAI / Cohere)**: High-performance embeddings and reranking
+- Web Search API Key (Optional):
+  - **Tavily API Key** (Optimized for research/agents)
+  - **Google Custom Search** API key + CSE ID
 
 ## Installation
 
@@ -28,48 +32,54 @@ pip install -r requirements.txt
 
 ### 3. Get API Keys
 
-**Required:**
-1.  **LLM Provider** - Get an API key from:
-    - [OpenAI](https://platform.openai.com/api-keys) (recommended: GPT-4o)
-    - OR [Anthropic](https://console.anthropic.com/) (Claude models)
-2.  **RAG Provider** (choose one):
-    - **Local**: No setup needed - automatically uses HuggingFace models (BAAI BGE-small-en-v1.5 embeddings + BGE reranker-v2-m3)
-    - **Cloud**: Sign up at [cohere.com](https://cohere.com/) for 1024D embeddings with built-in reranking
+ChatPilot supports multiple providers for both LLM and RAG features.
 
-**Optional (for web search):**
-- **Tavily** (recommended): Get your key at [tavily.com](https://tavily.com)
-- OR **Google Custom Search**: 
-  - API key from [Google Cloud Console](https://console.cloud.google.com/)
-  - CSE ID from [cse.google.com](https://cse.google.com)
-- **OpenAlex**: Get an API key at [OpenAlex.org](https://docs.openalex.org/how-to-use-the-api/api-overview) and add `OPENALEX_API_KEY=your_openalex_api_key` to your `.env`. Restart the server after updating `.env`.
+**Required (LLM Provider):**
+Choose your primary LLM and get its API key:
+- [OpenAI](https://platform.openai.com/)
+- [Anthropic](https://console.anthropic.com/)
+- [DeepSeek](https://platform.deepseek.com/)
+- [Google AI](https://aistudio.google.com/)
+
+**RAG Support (Embeddings & Reranking):**
+You can mix and match any combination of providers:
+- **Embeddings**: `openai`, `cohere`, or `local` (BAAI BGE)
+- **Reranker**: `cohere` or `local` (BAAI BGE)
+
+> [!NOTE]
+> If you select `cohere` or `openai` as a provider but do NOT provide the corresponding API key, ChatPilot will automatically fall back to **local** models to ensure the app continues to function.
+
+**Optional (Search):**
+- **Tavily**: Recommended for web research.
+- **OpenAlex**: For scholar research tools.
 
 ### 4. Set up environment variables
 
-Create a `.env` file in the project root with your API keys:
+Create a `.env` file in the project root with the following structure:
 
 ```bash
-# Required - Choose your LLM provider
-LLM_PROVIDER=openai  # or "anthropic"
-LLM_API_KEY=your_openai_or_anthropic_key
+# --- LLM CONFIGURATION ---
+LLM_PROVIDER=openai  # openai, anthropic, deepseek, or google
+MODEL_NAME=gpt-4o     # The specific model version to use
+LLM_API_KEY=your_api_key_here
 
-# RAG Provider (optional - defaults to local HuggingFace if not set)
-# Leave COHERE_API_KEY empty to use local BGE embeddings
-COHERE_API_KEY=  # Add your API key here only if you want to use Cohere embeddings
-OPENALEX_API_KEY=your_openalex_api_key # Add your OpenAlex API key here if you want to use scholar research
-# Optional - Web Search (choose one)
-TAVILY_API_KEY=your_tavily_api_key  # Recommended for accuracy
+# --- RAG CONFIGURATION (MIX & MATCH) ---
+# Choose your embedding and reranker providers independently
+EMBEDDING_PROVIDER=openai  # Options: openai, cohere, local
+RERANKER_PROVIDER=local    # Options: cohere, local
 
-# OR use Google Custom Search instead
+# --- SEARCH CONFIGURATION (OPTIONAL) ---
+TAVILY_API_KEY=your_tavily_api_key
+OPENALEX_API_KEY=your_openalex_api_key
+
+# OR Google Custom Search
 WEB_SEARCH_API_KEY=your_google_api_key
-CSE_ID=your_custom_search_engine_id
-
-# Optional - Model selection
-MODEL_NAME=gpt-4o  # or gpt-4o-mini, claude-3-5-sonnet-20241022, etc.
+CSE_ID=your_cse_id
 ```
 
 ### 5. Build the Docker sandbox image
 
-For secure code execution, build the sandbox container:
+For secure code execution / data analysis:
 ```bash
 docker build -t python-sandbox:latest -f Dockerfile .
 ```
@@ -80,73 +90,25 @@ docker build -t python-sandbox:latest -f Dockerfile .
 python main.py
 ```
 
-## Configuration Options
+## Advanced Configuration
 
-### Customizing Model & RAG Settings
+### Resource Limits (Docker Sandbox)
+Adjust container resource limits in `.env` to match your hardware:
+- `SANDBOX_NANO_CPUS`: CPU limit (e.g., 500000000 is 0.5 CPU)
+- `SANDBOX_MEM_LIMIT`: Memory limit (e.g., 2g)
 
+### RAG Performance Tuning
 Edit `app/core/config.py` to adjust:
-
-**Model Configuration:**
-```python
-admin = AdminConfig(
-    model=ModelConfig(
-        temperature=0.7,      # 0.0-2.0: controls randomness
-        max_tokens=4096,      # Maximum response length
-        top_p=0.9            # 0.0-1.0: nucleus sampling
-    ),
-    rag=RAGConfig(
-        chunk_size=512,      # How documents are split
-        chunk_overlap=50,    # Overlap between chunks
-        top_k=20            # Number of chunks to retrieve
-    ),
-    max_conversation_turns=10  # Chat history context
-)
-```
-
-**System Prompt Customization:**
-```python
-# In config.py, change the tone style:
-system_prompt = get_system_prompt(ToneStyle.PROFESSIONAL)
-# Options: PROFESSIONAL, FRIENDLY, CONCISE, CREATIVE
-```
-
-### Web Search Providers
-
-ChatPilot supports two web search providers:
-
-1.  **Tavily** (Recommended): More accurate, optimized for AI applications
-    - Get your API key at [tavily.com](https://tavily.com)
-    - Set `TAVILY_API_KEY` in `.env`
-2.  **Google Custom Search**: Traditional search with broader coverage
-    - Get API key from Google Cloud Console
-    - Create a Custom Search Engine at [cse.google.com](https://cse.google.com)
-    - Set `WEB_SEARCH_API_KEY` and `CSE_ID` in `.env`
+- `chunk_size`: Size of document segments (default 512)
+- `top_k`: Number of chunks picked by initial search (default 20)
+- `top_n`: Number of chunks kept after reranking (default 10)
 
 
 ## Usage
 
-### Starting the server
-```bash
-python main.py
-```
+### Document Ingestion
+Upload files via the UI (PDF, TXT, DOCX, MD). ChatPilot supports OCR automatically. Documents are indexed instantly and available for the RAG pipeline.
 
-Server runs on `http://localhost:8000` with 4 worker processes for production-grade performance.
-
-### Adding documents for RAG
-
-Use the web interface to upload documents:
-1.  Navigate to the ingestion section in the UI
-2.  Upload your files (PDF, TXT, HTML, DOCX, MD, Scanned documents (OCR-enabled))  
-3.  Documents are automatically indexed and ready for Q&A
-
-No need to manually place files in directories or restart the server.
-
-### Updating configuration
-
-**To change API keys or add new providers:**
-- Edit the `.env` file in the project root
-- Restart the server to apply changes
-
-**To adjust model behavior, RAG settings, or system prompt:**
-- Edit `app/core/config.py`
-- Restart the server to apply changes
+### Web & Scholar Research
+- **WebResearch**: Uses Tavily/Google to synthesize answers from the web.
+- **Scholar Research**: Uses OpenAlex for multi-step academic research.
