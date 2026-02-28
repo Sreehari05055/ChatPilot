@@ -14,6 +14,7 @@ class ResearchState(TypedDict):
     original_query: str
     search_query: str
     sub_queries: List[str]
+    count: int
     paper_metadata: List[dict]
     downloaded_files: List[str]
     report: str
@@ -48,7 +49,7 @@ class DeepScholarResearchService:
 
     async def search_papers(self, state: ResearchState):
         logger.info(f"Searching papers for: {state['search_query']} (Original: {state['original_query']})")
-        results = await self.research_service.semantic_scholar_search(state['search_query'], count=5)
+        results = await self.research_service.semantic_scholar_search(state['search_query'], count=state['count'])
         
         # If results is a string (error), handle it
         if isinstance(results, str):
@@ -85,8 +86,16 @@ class DeepScholarResearchService:
                     response = await client.get(pdf_url, headers=headers, follow_redirects=True)
                     
                     if response.status_code == 200:
+                        content = response.content
+                        if not content.startswith(b"%PDF-"):
+                            logger.warning(
+                                f"Response is not a valid PDF for {paper['title']} "
+                                f"(Content-Type: {response.headers.get('Content-Type')})"
+                            )
+                            continue
+
                         with open(filepath, "wb") as f:
-                            f.write(response.content)
+                            f.write(content)
                         downloaded.append(filepath)
                         logger.info(f"Successfully downloaded: {filename}")
                     else:
@@ -126,11 +135,12 @@ class DeepScholarResearchService:
         
         return {"report": report, "sources": sources}
 
-    async def run_research(self, original_query: str, search_query: str, sub_queries: List[str]):
+    async def run_research(self, original_query: str, search_query: str, sub_queries: List[str], count: int = 5):
         initial_state = {
             "original_query": original_query,
             "search_query": search_query,
             "sub_queries": sub_queries,
+            "count": count,
             "paper_metadata": [],
             "downloaded_files": [],
             "report": "",

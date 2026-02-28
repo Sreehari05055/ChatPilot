@@ -82,7 +82,8 @@ class ToolExecutor:
         return await deep_research_service.run_research(
             original_query=args.get("original_query"),
             search_query=args.get("search_query"),
-            sub_queries=args.get("sub_queries", [])
+            sub_queries=args.get("sub_queries", []),
+            count=args.get("count", 5)
         )
 
     async def _execute_get_info(self, args, ctx):
