@@ -78,10 +78,18 @@ class Config:
         if EMBEDDING_PROVIDER:
             EMBEDDING_PROVIDER = EMBEDDING_PROVIDER.lower().strip()
         
-        if not EMBEDDING_PROVIDER:
+        # Validate or Auto-detect Embedding Provider
+        if EMBEDDING_PROVIDER == "cohere" and not os.getenv("COHERE_API_KEY"):
+            logger.warning("COHERE_API_KEY missing. Falling back to local embeddings.")
+            EMBEDDING_PROVIDER = "local"
+        elif EMBEDDING_PROVIDER == "openai" and not (os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")):
+            logger.warning("OpenAI API key missing. Falling back to local embeddings.")
+            EMBEDDING_PROVIDER = "local"
+        
+        if not EMBEDDING_PROVIDER or EMBEDDING_PROVIDER not in ["openai", "cohere", "local"]:
             if os.getenv("COHERE_API_KEY"):
                 EMBEDDING_PROVIDER = "cohere"
-            elif os.getenv("OPENAI_API_KEY") or LLM_PROVIDER == "openai":
+            elif os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY"):
                 EMBEDDING_PROVIDER = "openai"
             else:
                 EMBEDDING_PROVIDER = "local"
@@ -90,7 +98,12 @@ class Config:
         if RERANKER_PROVIDER:
             RERANKER_PROVIDER = RERANKER_PROVIDER.lower().strip()
             
-        if not RERANKER_PROVIDER:
+        # Validate or Auto-detect Reranker Provider
+        if RERANKER_PROVIDER == "cohere" and not os.getenv("COHERE_API_KEY"):
+            logger.warning("COHERE_API_KEY missing. Falling back to local reranker.")
+            RERANKER_PROVIDER = "local"
+
+        if not RERANKER_PROVIDER or RERANKER_PROVIDER not in ["cohere", "local"]:
             if os.getenv("COHERE_API_KEY"):
                 RERANKER_PROVIDER = "cohere"
             else:
