@@ -3,6 +3,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from app.services.parser.base_parser import BaseParser
 from app.core.hardware import HardwareDetector
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from app import logger
 from app.core.config import Config
 from transformers import AutoTokenizer
@@ -15,11 +16,17 @@ class PDFExtractor(BaseParser):
     """
     def __init__(self):
         from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.datamodel.pipeline_options import TableStructureOptions, TableFormerMode
 
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True
+        hw_config = HardwareDetector.get_runtime_config()
+        table_options = TableStructureOptions()
+        table_options.mode = TableFormerMode.FAST 
+
+        pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
-        
+        pipeline_options.table_structure_options = table_options
+        pipeline_options.accelerator_options = hw_config["accelerator_options"]
         try:
             if "text-embedding-3" in Config.EMBEDDING_MODEL.lower() or "openai" in Config.EMBEDDING_PROVIDER.lower():
                 import tiktoken
