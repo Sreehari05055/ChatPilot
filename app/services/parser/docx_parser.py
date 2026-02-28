@@ -11,13 +11,17 @@ class DocxExtractor(BaseParser):
     """
     def __init__(self):
         from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.datamodel.pipeline_options import TableStructureOptions, TableFormerMode
         
-        # 1. Define DOCX-specific logic (No OCR needed for native text)
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True
-        
-        # 2. Inject global hardware acceleration
         hw_config = HardwareDetector.get_runtime_config()
+        table_options = TableStructureOptions()
+        table_options.mode = TableFormerMode.FAST 
+
+
+        pipeline_options.do_ocr = False
+        pipeline_options.do_table_structure = True
+        pipeline_options.table_structure_options = table_options
         pipeline_options.accelerator_options = hw_config["accelerator_options"]
         
         self.converter = DocumentConverter(
