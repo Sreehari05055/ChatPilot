@@ -1,6 +1,6 @@
 import os
 import httpx
-from typing import TypedDict, Annotated, List, Union, Dict
+from typing import TypedDict, Annotated, List, Optional ,Union, Dict
 from langgraph.graph import StateGraph, END
 from app.core.config import Config
 from app import logger
@@ -30,16 +30,29 @@ class DeepScholarResearchService:
         os.makedirs(self.data_dir, exist_ok=True)
         
         self.workflow = self._create_workflow()
-
+        
+    def _route_entry(self, state: ResearchState) -> str:
+        """Route to search or skip directly to download based on pre-filled paper_metadata."""
+        if state.get("paper_metadata"):
+            logger.info(f"Paper metadata pre-filled ({len(state['paper_metadata'])} papers). Skipping search.")
+            return "download_papers"
+        return "search_papers"
+    
     def _create_workflow(self):
         workflow = StateGraph(ResearchState)
-        
+
+        workflow.add_node("router", lambda state: {})
         workflow.add_node("search_papers", self.search_papers)
         workflow.add_node("download_papers", self.download_papers)
         workflow.add_node("index_papers", self.index_papers)
         workflow.add_node("generate_report", self.generate_report)
         
-        workflow.set_entry_point("search_papers")
+
+        workflow.set_entry_point("router")
+        workflow.add_conditional_edges("router", self._route_entry, {
+            "search_papers": "search_papers",
+            "download_papers": "download_papers"
+        })
         workflow.add_edge("search_papers", "download_papers")
         workflow.add_edge("download_papers", "index_papers")
         workflow.add_edge("index_papers", "generate_report")
@@ -80,6 +93,12 @@ class DeepScholarResearchService:
                     filename = "".join([c if c.isalnum() else "_" for c in paper['title'][:50]]) + ".pdf"
                     filepath = os.path.join(self.data_dir, filename)
                     
+                    # Skip if file already exists on disk
+                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                        logger.info(f"Skipping already downloaded: {filename}")
+                        downloaded.append(filepath)
+                        continue
+
                     logger.info(f"Downloading {paper['title']} from {pdf_url}")
                     # Standard User-Agent set in headers
                     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
@@ -122,26 +141,37 @@ class DeepScholarResearchService:
         context = rag_results.get("context_text", "No relevant context found.")
         sources = rag_results.get("sources", [])
         
-        # In a real scenario, we might call an LLM here to synthesize the report.
-        # For this implementation, we return the context as a base for the LLM that called this tool.
+        downloaded_titles = set()
+        for f in state.get('downloaded_files', []):
+            downloaded_titles.add(os.path.basename(f))
         
+
         report = f"Research Report for: {state['original_query']}\n\n"
-        report += "Papers Analyzed:\n"
+        report += "Papers Successfully Downloaded & Indexed:\n"
         for paper in state['paper_metadata']:
-             report += f"- {paper['title']} ({paper['publication_year']})\n"
+            filename = "".join([c if c.isalnum() else "_" for c in paper['title'][:50]]) + ".pdf"
+            if filename in downloaded_titles:
+                report += f"- {paper['title']} ({paper['publication_year']})\n"
+                
+        failed = [p for p in state['paper_metadata']
+            if "".join([c if c.isalnum() else "_" for c in p['title'][:50]]) + ".pdf" not in downloaded_titles]
+        if failed:
+            report += "\nPapers That Could NOT Be Downloaded (unavailable PDFs — do NOT retry):\n"
+            for paper in failed:
+                report += f"- {paper['title']} ({paper['publication_year']})\n"
         
         report += "\nKey Insights from Documents:\n"
         report += context
         
         return {"report": report, "sources": sources}
 
-    async def run_research(self, original_query: str, search_query: str, sub_queries: List[str], count: int = 5):
+    async def run_research(self, original_query: str, sub_queries: List[str], search_query: Optional[str] = None, paper_metadata: Optional[List[dict]] = None,count: int = 5):
         initial_state = {
             "original_query": original_query,
-            "search_query": search_query,
+            "search_query": search_query or "",
             "sub_queries": sub_queries,
             "count": count,
-            "paper_metadata": [],
+            "paper_metadata": paper_metadata or [],
             "downloaded_files": [],
             "report": "",
             "sources": [],

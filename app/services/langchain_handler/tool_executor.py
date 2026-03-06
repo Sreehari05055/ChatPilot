@@ -78,6 +78,7 @@ class ToolExecutor:
             original_query=args.get("original_query"),
             search_query=args.get("search_query"),
             sub_queries=args.get("sub_queries", []),
+            paper_metadata=args.get("paper_metadata"),
             count=args.get("count", 5)
         )
 
@@ -197,7 +198,7 @@ class ToolExecutor:
         has_pdf = args.get("has_pdf")
         
         # For demonstration, we reuse the web research method. In a real implementation, this would call a dedicated research service.
-        research_results = await self.research_service.get_formatted_search_results(query=query, count=count, publication_year=publication_year, is_oa=is_oa, has_pdf=has_pdf)
+        research_results = await self.research_service.semantic_scholar_search(query=query, count=count, publication_year=publication_year, is_oa=is_oa, has_pdf=has_pdf)
         
         logger.info(f"FetchResearch results received: {research_results}")
         return research_results

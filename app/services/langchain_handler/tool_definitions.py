@@ -66,6 +66,15 @@ class ExecuteCode(BaseModel):
     """Run Python code in the sandbox and return the result/plots."""
     code: str = Field(description="The Python code to execute.")
 
+class PaperMetadata(BaseModel):
+    """Metadata for a previously fetched research paper."""
+    id: str = Field(description="The OpenAlex work ID (e.g., 'W2741809807'). Used to construct the download URL.")
+    title: str = Field(description="The paper title. Used for generating the filename.")
+    pdf_url: Optional[str] = Field(description="Direct PDF download URL. Used as fallback if the Content API fails.")
+    authors: Optional[List[str]] = Field(description="List of author names.")
+    publication_year: Optional[int] = Field(description="Year of publication.")
+    doi: Optional[str] = Field(description="DOI identifier.")
+
 class FetchResearch(BaseModel):
     """
     OpenAlex keyword search API for finding research papers.
@@ -108,30 +117,42 @@ class FetchResearch(BaseModel):
 
 class DeepScholarResearchAndHighlight(BaseModel):
     """
-    Advanced research tool that combines semantic search with document retrieval and response generation. Use this for complex research questions that require not just finding papers, but also extracting and summarizing key insights from them.
+    Advanced research tool that downloads, indexes, and RAGs academic papers to synthesize answers.
 
-    This tool performs the following steps:
-    1. Semantic Scholar Search: Uses the query to find relevant papers based on meaning, not just keywords.
-    2. Article Retrieval: Fetches the full text of the most relevant papers.
-    3. Article Indexing: Processes and indexes the retrieved articles for efficient access.
-    4. Response Generation: Synthesizes a comprehensive answer to the user's query based on the indexed articles, highlighting key findings and insights.
+    TWO MODES OF OPERATION:
 
-    This is ideal for in-depth research questions where the user needs a synthesized answer derived from multiple academic sources.
+    Mode 1 — Full pipeline (search + download + index + RAG):
+    Provide `search_query` to search for new papers. The tool will find papers, download them, index them, and generate a report.
 
-    Example usage:
-    User asks: "Get me some relevant research articles on the role of gut microbiome in neurodegenerative diseases and give me the relevant parts from those papers that helps my research on Parkinson's."
-    search_query: '"gut microbiome" AND "neurodegenerative diseases" AND Parkinson's'
-    original_query: "The role of gut microbiome in neurodegenerative diseases specifically focused on Parkinson's research."
-    sub_queries: ["gut-brain axis Parkinson's disease research", "microbiome composition neurodegeneration", "therapeutic potential of probiotics in Parkinson's"]
+    Mode 2 — Skip search (download + index + RAG from prior results):
+    If papers were already fetched in a previous turn via FetchResearch, pass them in `paper_metadata` and omit `search_query`. The tool will skip the search step and directly download, index, and RAG those papers.
+
+    CRITICAL — BATCHING RULE:
+    Always pass ALL relevant papers in a SINGLE call via `paper_metadata`. NEVER split papers across multiple calls.
+    The tool handles multiple papers internally — it downloads all, builds one unified index, and generates one comprehensive report.
+    Splitting papers into separate calls causes redundant index rebuilds and wastes time.
+
+    Example Mode 1 (fresh search):
+    User asks: "Get me research on gut microbiome in Parkinson's and highlight the relevant parts."
+    search_query: '"gut microbiome" AND "neurodegenerative diseases" AND Parkinson\'s'
+    original_query: "The role of gut microbiome in neurodegenerative diseases focused on Parkinson's."
+    sub_queries: ["gut-brain axis Parkinson's disease", "microbiome composition neurodegeneration"]
+
+    Example Mode 2 (prior FetchResearch results — ALL papers in one call):
+    User asks: "Download those papers you found and tell me what they say about dopamine pathways."
+    original_query: "Dopamine pathway mechanisms discussed in the fetched papers."
+    sub_queries: ["dopamine pathway mechanisms", "neurotransmitter regulation"]
+    paper_metadata: [{"id": "W2741809807", ...}, {"id": "W3148293100", ...}, {"id": "W1234567890", ...}]
     """
     
     original_query: str = Field(description="The complex research question or topic that requires an in-depth answer synthesized from multiple academic papers.")
-    search_query: str = Field(description="A keyword-optimized search query for the academic database. Use Boolean operators (AND, OR, NOT) and exact phrases in quotes as defined in FetchResearch to find relevant papers.")
-    sub_queries: List[str] = Field(description=(        
+    search_query: Optional[str] = Field(default=None, description="A keyword-optimized search query for the academic database. Required for Mode 1 (fresh search). Omit when providing paper_metadata from a previous FetchResearch call.")
+    sub_queries: List[str] = Field(description=(
         "Semantically rewritten search queries derived from the original query and relevant context from the conversation history. "
         "Each item should be a full natural-language query optimized for vector retrieval, "
         "DO NOT return single words or keyword lists."))
-    count: int = Field(default=5, description="The number of research papers to index. Default is 5.")
+    paper_metadata: Optional[List[PaperMetadata]] = Field(default=None, description="Pre-fetched paper metadata from a previous FetchResearch call. When provided, the search step is skipped and these papers are downloaded directly. Each entry needs at minimum 'id' and 'title'.")
+    count: int = Field(default=5, description="The number of research papers to search for (only used in Mode 1). Default is 5.")
 
 
 def get_tool_schemas():
