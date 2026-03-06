@@ -133,13 +133,9 @@ class DeepScholarResearchAndHighlight(BaseModel):
         "DO NOT return single words or keyword lists."))
     count: int = Field(default=5, description="The number of research papers to index. Default is 5.")
 
-class InternalThought(BaseModel):
-    """CONDITIONAL STEP. Use this tool to log your internal reasoning, planning, and risk assessments before taking any other action. Required for complex queries and before tool calls, but skip it for simple/direct greetings and basic questions."""
-    reasoning: str = Field(description="Your detailed internal thought process, hypothesis, and plan of action.")
 
 def get_tool_schemas():
     return [
-        InternalThought,
         AnalyzeData,
         ExecuteCode,
         ExtractMetadata,
