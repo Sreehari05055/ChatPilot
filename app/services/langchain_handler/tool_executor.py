@@ -19,7 +19,6 @@ class ToolExecutor:
         """Dynamic tool dispatcher."""
         try:
             dispatch_map = {
-                "InternalThought": self._execute_internal_thought,
                 "WebSearch": self._execute_web_search,
                 "WebFetch": self._execute_web_fetch,
                 "WebResearch": self._execute_web_research,
@@ -53,10 +52,6 @@ class ToolExecutor:
             return f"Error executing {function_name}: {str(e)}"
 
     # --- Tool Implementation Wrappers ---
-
-    async def _execute_internal_thought(self, args, ctx):
-        """Acknowledges the reasoning was recorded."""
-        return "Thought recorded."
 
     async def _execute_web_search(self, args, ctx):
         query = args.pop("question")

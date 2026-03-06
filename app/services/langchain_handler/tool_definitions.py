@@ -91,7 +91,7 @@ class FetchResearch(BaseModel):
     """
     
     query: str = Field(description="The user's research query to find relevant academic papers. This should be a natural language question or topic (e.g., 'What are the latest advancements in CRISPR gene editing?').")
-    count: int = Field(default=25, description="The number of research papers to return. Default is 25.")
+    count: int = Field(default=10, description="The number of research papers to return. Default is 10.")
     publication_year: Optional[str] = Field(
         default=">1950",
         description="Filter by year (e.g., '2023', '>2020', or '2020-2023'). Default is '>1950'."
@@ -133,13 +133,9 @@ class DeepScholarResearchAndHighlight(BaseModel):
         "DO NOT return single words or keyword lists."))
     count: int = Field(default=5, description="The number of research papers to index. Default is 5.")
 
-class InternalThought(BaseModel):
-    """CONDITIONAL STEP. Use this tool to log your internal reasoning, planning, and risk assessments before taking any other action. Required for complex queries and before tool calls, but skip it for simple/direct greetings and basic questions."""
-    reasoning: str = Field(description="Your detailed internal thought process, hypothesis, and plan of action.")
 
 def get_tool_schemas():
     return [
-        InternalThought,
         AnalyzeData,
         ExecuteCode,
         ExtractMetadata,
