@@ -12,7 +12,7 @@ class OpenAlexResearchService(BaseResearchService):
         self.works_url = "https://api.openalex.org/works" 
 
 
-    async def semantic_scholar_search(self, query, count=25, publication_year=">1900", is_oa=True, has_pdf=True) -> list:
+    async def semantic_scholar_search(self, query, count=10, publication_year=">1900", is_oa=True, has_pdf=True) -> list:
         params = {
             "search": query,
             "per-page": min(count, 200),

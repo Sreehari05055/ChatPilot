@@ -91,7 +91,7 @@ class FetchResearch(BaseModel):
     """
     
     query: str = Field(description="The user's research query to find relevant academic papers. This should be a natural language question or topic (e.g., 'What are the latest advancements in CRISPR gene editing?').")
-    count: int = Field(default=25, description="The number of research papers to return. Default is 25.")
+    count: int = Field(default=10, description="The number of research papers to return. Default is 10.")
     publication_year: Optional[str] = Field(
         default=">1950",
         description="Filter by year (e.g., '2023', '>2020', or '2020-2023'). Default is '>1950'."
