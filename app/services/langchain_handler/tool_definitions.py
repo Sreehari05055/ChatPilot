@@ -44,7 +44,7 @@ class ListFiles(BaseModel):
     pass
 
 class GetInfo(BaseModel):
-    """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough."""
+    """Lookup specific data points, dates, or singular facts in the knowledge base. Use this for questions where a direct answer is enough. Also use this for follow-up questions about papers that have already been downloaded and indexed; do not call DeepScholarResearchAndHighlight again unless new papers need to be searched or downloaded."""
     topic: List[str] = Field(description=(        
         "Semantically rewritten search queries derived from the user question. "
         "Each item should be a full natural-language query optimized for vector retrieval, "
@@ -70,10 +70,10 @@ class PaperMetadata(BaseModel):
     """Metadata for a previously fetched research paper."""
     id: str = Field(description="The OpenAlex work ID (e.g., 'W2741809807'). Used to construct the download URL.")
     title: str = Field(description="The paper title. Used for generating the filename.")
-    pdf_url: Optional[str] = Field(description="Direct PDF download URL. Used as fallback if the Content API fails.")
-    authors: Optional[List[str]] = Field(description="List of author names.")
-    publication_year: Optional[int] = Field(description="Year of publication.")
-    doi: Optional[str] = Field(description="DOI identifier.")
+    pdf_url: Optional[str] = Field(default=None,description="Direct PDF download URL. Used as fallback if the Content API fails.")
+    authors: Optional[List[str]] = Field(default=None,description="List of author names.")
+    publication_year: Optional[int] = Field(default=None,description="Year of publication.")
+    doi: Optional[str] = Field(default=None,description="DOI identifier.")
 
 class FetchResearch(BaseModel):
     """
@@ -119,6 +119,9 @@ class DeepScholarResearchAndHighlight(BaseModel):
     """
     Advanced research tool that downloads, indexes, and RAGs academic papers to synthesize answers.
 
+    Use this only when you need to search for new papers or download/index papers that are not already available.
+    For follow-up questions about papers that were already downloaded and indexed in the current session, use GetInfo instead of calling this tool again.
+
     TWO MODES OF OPERATION:
 
     Mode 1 — Full pipeline (search + download + index + RAG):
@@ -155,6 +158,22 @@ class DeepScholarResearchAndHighlight(BaseModel):
     count: int = Field(default=5, description="The number of research papers to search for (only used in Mode 1). Default is 5.")
 
 
+    @model_validator(mode='after')
+    def validate_mode(self) -> 'DeepScholarResearchAndHighlight':
+        """
+        Enforce the input contract:
+        - At least one of `search_query` or `paper_metadata` must be provided.
+        - If `paper_metadata` is provided, it must be a non-empty list.
+        """
+        search_query = (self.search_query or "").strip()
+        if self.paper_metadata is not None and not self.paper_metadata:
+            raise ValueError("`paper_metadata` must be a non-empty list when provided.")
+        if not search_query and self.paper_metadata is None:
+            raise ValueError(
+                "Provide either a non-empty `search_query` or a non-empty `paper_metadata` list."
+            )
+        return self
+    
 def get_tool_schemas():
     return [
         AnalyzeData,

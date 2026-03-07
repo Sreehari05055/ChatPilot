@@ -1,6 +1,6 @@
 import os
 import httpx
-from typing import TypedDict, Annotated, List, Optional ,Union, Dict
+from typing import Annotated, Dict, List, Optional, TypedDict, Union
 from langgraph.graph import StateGraph, END
 from app.core.config import Config
 from app import logger
@@ -17,6 +17,7 @@ class ResearchState(TypedDict):
     count: int
     paper_metadata: List[dict]
     downloaded_files: List[str]
+    new_downloaded_files: List[str]
     report: str
     sources: List[dict]
     messages: Annotated[List[BaseMessage], operator.add]
@@ -73,6 +74,7 @@ class DeepScholarResearchService:
 
     async def download_papers(self, state: ResearchState):
         downloaded = []
+        new_downloads = []
 
         async with httpx.AsyncClient(timeout=Config.HTTP_TIMEOUT) as client:
             for paper in state['paper_metadata']:
@@ -116,17 +118,21 @@ class DeepScholarResearchService:
                         with open(filepath, "wb") as f:
                             f.write(content)
                         downloaded.append(filepath)
+                        new_downloads.append(filepath)
                         logger.info(f"Successfully downloaded: {filename}")
                     else:
                         logger.warning(f"Failed to download {paper['title']}: {response.status_code}")
                 except Exception as e:
                     logger.error(f"Error downloading {paper['title']}: {e}")
         
-        return {"downloaded_files": downloaded}
+        return {
+            "downloaded_files": downloaded,
+            "new_downloaded_files": new_downloads,
+        }
 
     async def index_papers(self, state: ResearchState):
-        if not state['downloaded_files']:
-            logger.warning("No papers downloaded to index.")
+        if not state['new_downloaded_files']:
+            logger.info("No new papers downloaded. Reusing existing RAG index.")
             return {}
         
         logger.info("Rebuilding RAG index with new papers...")
@@ -173,6 +179,7 @@ class DeepScholarResearchService:
             "count": count,
             "paper_metadata": paper_metadata or [],
             "downloaded_files": [],
+            "new_downloaded_files": [],
             "report": "",
             "sources": [],
             "messages": [HumanMessage(content=original_query)]
